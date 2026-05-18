@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Collaborative Grid Table</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 28px;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .connection-status.connected {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .connection-status.disconnected {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #4caf50;
+        }
+
+        .status-dot.disconnected {
+            background: #f44336;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .client-count {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 16px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+            transition: background 0.2s;
+        }
+
+        tbody tr:hover {
+            background: #f5f5f5;
+        }
+
+        tbody tr.highlight {
+            animation: highlightRow 1s;
+        }
+
+        @keyframes highlightRow {
+            0%, 100% { background: white; }
+            50% { background: #fff9c4; }
+        }
+
+        td {
+            padding: 14px 16px;
+            color: #333;
+        }
+
+        td[contenteditable="true"] {
+            cursor: text;
+            position: relative;
+        }
+
+        td[contenteditable="true"]:hover {
+            background: #f0f0f0;
+            outline: 1px dashed #999;
+        }
+
+        td[contenteditable="true"]:focus {
+            background: #fff9c4;
+            outline: 2px solid #667eea;
+        }
+
+        .id-cell {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .actions-cell {
+            text-align: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: none;
+            align-items: center;
+            gap: 12px;
+            z-index: 1000;
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification.show {
+            display: flex;
+        }
+
+        .notification.success {
+            border-left: 4px solid #4caf50;
+        }
+
+        .notification.info {
+            border-left: 4px solid #2196f3;
+        }
+
+        .notification.warning {
+            border-left: 4px solid #ff9800;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Real-Time Grid Table</h1>
+            <div class="status-bar">
+                <div class="connection-status disconnected" id="connectionStatus">
+                    <span class="status-dot disconnected" id="statusDot"></span>
+                    <span id="statusText">Disconnected</span>
+                </div>
+                <div class="client-count" id="clientCount">
+                    👥 Clients: 0
+                </div>
+            </div>
+        </header>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="addNewRow()">
+                ➕ Add New Row
+            </button>
+        </div>
+
+        <div class="table-container">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Department</th>
+                        <th>Salary</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Rows will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">
+        <span id="notificationIcon">ℹ️</span>
+        <span id="notificationMessage"></span>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+    <script>
+        // Initialize Socket.io connection
+        // Auto-detect: use current host if served from server, otherwise localhost for testing
+        const socketUrl = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3001' 
+            : window.location.origin;
+        const socket = io(socketUrl);
+        
+        // Data store
+        let gridData = [
+            { id: 1, name: 'John Doe', email: 'john@example.com', department: 'Engineering', salary: '$85,000' },
+            { id: 2, name: 'Jane Smith', email: 'jane@example.com', department: 'Marketing', salary: '$75,000' },
+            { id: 3, name: 'Bob Johnson', email: 'bob@example.com', department: 'Sales', salary: '$70,000' },
+            { id: 4, name: 'Alice Williams', email: 'alice@example.com', department: 'HR', salary: '$65,000' },
+            { id: 5, name: 'Charlie Brown', email: 'charlie@example.com', department: 'Finance', salary: '$80,000' }
+        ];
+
+        let nextId = 6;
+        let isInitialSync = false;
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            updateConnectionStatus(true);
+            showNotification('Connected to server', 'success', '✅');
+            
+            // Request data sync from other clients if this is not the first client
+            if (!isInitialSync) {
+                socket.emit('requestDataSync');
+                isInitialSync = true;
+            }
+        });
+
+        socket.on('disconnect', () => {
+            updateConnectionStatus(false);
+            showNotification('Disconnected from server', 'warning', '⚠️');
+        });
+
+        socket.on('clientCount', (count) => {
+            document.getElementById('clientCount').textContent = `👥 Clients: ${count}`;
+        });
+
+        // Handle incoming row addition from other clients
+        socket.on('rowAdded', (rowData) => {
+            gridData.push(rowData);
+            renderTable();
+            highlightRow(rowData.id);
+            showNotification(`New row added by another user`, 'info', 'ℹ️');
+        });
+
+        // Handle incoming row edit from other clients
+        socket.on('rowEdited', (updatedRow) => {
+            const index = gridData.findIndex(row => row.id === updatedRow.id);
+            if (index !== -1) {
+                gridData[index] = updatedRow;
+                renderTable();
+                highlightRow(updatedRow.id);
+                showNotification(`Row #${updatedRow.id} updated by another user`, 'info', 'ℹ️');
+            }
+        });
+
+        // Handle incoming row deletion from other clients
+        socket.on('rowDeleted', (data) => {
+            const index = gridData.findIndex(row => row.id === data.id);
+            if (index !== -1) {
+                gridData.splice(index, 1);
+                renderTable();
+                showNotification(`Row #${data.id} deleted by another user`, 'info', 'ℹ️');
+            }
+        });
+
+        // Handle data sync request from new clients
+        socket.on('requestDataSync', (data) => {
+            // Send current data to the requesting client
+            socket.emit('syncDataResponse', {
+                targetSocketId: data.socketId,
+                rows: gridData
+            });
+        });
+
+        // Handle data sync response
+        socket.on('syncDataResponse', (rows) => {
+            if (rows && rows.length > 0) {
+                gridData = rows;
+                // Update nextId based on synced data
+                const maxId = Math.max(...gridData.map(row => row.id));
+                nextId = maxId + 1;
+                renderTable();
+                showNotification('Data synchronized with other clients', 'success', '🔄');
+            }
+        });
+
+        // UI Functions
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            const dotEl = document.getElementById('statusDot');
+            const textEl = document.getElementById('statusText');
+
+            if (connected) {
+                statusEl.classList.remove('disconnected');
+                statusEl.classList.add('connected');
+                dotEl.classList.remove('disconnected');
+                dotEl.classList.add('connected');
+                textEl.textContent = 'Connected';
+            } else {
+                statusEl.classList.remove('connected');
+                statusEl.classList.add('disconnected');
+                dotEl.classList.remove('connected');
+                dotEl.classList.add('disconnected');
+                textEl.textContent = 'Disconnected';
+            }
+        }
+
+        function showNotification(message, type, icon) {
+            const notification = document.getElementById('notification');
+            const iconEl = document.getElementById('notificationIcon');
+            const messageEl = document.getElementById('notificationMessage');
+
+            notification.className = `notification ${type} show`;
+            iconEl.textContent = icon;
+            messageEl.textContent = message;
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            
+            if (gridData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <div>No data available. Click "Add New Row" to get started.</div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = gridData.map(row => `
+                <tr id="row-${row.id}">
+                    <td class="id-cell">${row.id}</td>
+                    <td contenteditable="true" data-field="name" data-id="${row.id}">${row.name}</td>
+                    <td contenteditable="true" data-field="email" data-id="${row.id}">${row.email}</td>
+                    <td contenteditable="true" data-field="department" data-id="${row.id}">${row.department}</td>
+                    <td contenteditable="true" data-field="salary" data-id="${row.id}">${row.salary}</td>
+                    <td class="actions-cell">
+                        <button class="btn btn-danger" onclick="deleteRow(${row.id})">🗑️ Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Add blur event listeners to editable cells
+            document.querySelectorAll('td[contenteditable="true"]').forEach(cell => {
+                cell.addEventListener('blur', handleCellEdit);
+            });
+        }
+
+        function addNewRow() {
+            const newRow = {
+                id: nextId++,
+                name: 'New Employee',
+                email: 'email@example.com',
+                department: 'Department',
+                salary: '$0'
+            };
+
+            // Add to local data
+            gridData.push(newRow);
+            renderTable();
+            highlightRow(newRow.id);
+
+            // Emit to server
+            socket.emit('rowAdded', newRow);
+            showNotification('New row added', 'success', '✅');
+        }
+
+        function handleCellEdit(event) {
+            const cell = event.target;
+            const rowId = parseInt(cell.dataset.id);
+            const field = cell.dataset.field;
+            const newValue = cell.textContent.trim();
+
+            // Find and update the row
+            const rowIndex = gridData.findIndex(row => row.id === rowId);
+            if (rowIndex !== -1) {
+                const oldValue = gridData[rowIndex][field];
+                
+                if (oldValue !== newValue) {
+                    gridData[rowIndex][field] = newValue;
+                    
+                    // Emit updated row to server
+                    socket.emit('rowEdited', gridData[rowIndex]);
+                    showNotification(`Updated ${field} for row #${rowId}`, 'success', '✅');
+                }
+            }
+        }
+
+        function deleteRow(id) {
+            const index = gridData.findIndex(row => row.id === id);
+            if (index !== -1) {
+                if (confirm(`Are you sure you want to delete row #${id}?`)) {
+                    gridData.splice(index, 1);
+                    renderTable();
+
+                    // Emit deletion to server
+                    socket.emit('rowDeleted', { id });
+                    showNotification(`Row #${id} deleted`, 'success', '✅');
+                }
+            }
+        }
+
+        function highlightRow(id) {
+            const row = document.getElementById(`row-${id}`);
+            if (row) {
+                row.classList.add('highlight');
+                setTimeout(() => {
+                    row.classList.remove('highlight');
+                }, 1000);
+            }
+        }
+
+        // Initial render
+        renderTable();
+    </script>
+</body>
+</html>

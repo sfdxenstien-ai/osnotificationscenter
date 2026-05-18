@@ -1,0 +1,20 @@
+{
+  "name": "grid-table-websocket-server",
+  "version": "1.0.0",
+  "description": "WebSocket server for real-time collaborative grid table",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["websocket", "socket.io", "grid", "real-time"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^2.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.7"
+  }
+}

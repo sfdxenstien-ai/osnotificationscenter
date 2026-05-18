@@ -1,0 +1,21 @@
+services:
+  # Main WebSocket Server with REST API
+  - type: web
+    name: salesforce-websocket-server
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /api/health
+  
+  # Grid Table WebSocket Server (if needed separately)
+  - type: web
+    name: grid-table-websocket-server
+    env: node
+    buildCommand: cd gridTable/server && npm install
+    startCommand: cd gridTable/server && node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production

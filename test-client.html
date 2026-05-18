@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test Client</title>
+    <style>
+        body { font-family: Arial; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .container { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        #messages { height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #f9f9f9; }
+        .message { margin: 5px 0; padding: 5px; }
+        .connected { color: green; }
+        .disconnected { color: red; }
+        .event { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Test Client</h1>
+    
+    <div class="container">
+        <h3>Connection Status: <span id="status" class="disconnected">Disconnected</span></h3>
+        <div>Server Time: <span id="server-time">--</span></div>
+    </div>
+
+    <div class="container">
+        <h3>Test Chat Events</h3>
+        <div>
+            <input id="nameInput" placeholder="Your name" value="TestUser">
+            <input id="messageInput" placeholder="Message" value="Hello from test!">
+            <button onclick="sendMessage()">Send Message</button>
+        </div>
+        <button onclick="sendUserTyping()">Simulate User Typing</button>
+        <button onclick="sendUserNotTyping()">Simulate User Not Typing</button>
+        <button onclick="sendTransmit()">Transmit</button>
+        <button onclick="sendUserEntered()">User Entered Chat</button>
+        <button onclick="sendUserLeft()">User Left Chat</button>
+    </div>
+
+    <div class="container">
+        <h3>Event Log</h3>
+        <button onclick="clearMessages()">Clear Log</button>
+        <div id="messages"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+    <script>
+        const serverUrl = 'https://websocketspoc.onrender.com';
+        const socket = io(serverUrl, {
+            transports: ['websocket', 'polling']
+        });
+        const messagesDiv = document.getElementById('messages');
+        const statusSpan = document.getElementById('status');
+        const timeSpan = document.getElementById('server-time');
+
+        function addMessage(msg, type = 'event') {
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Connection events
+        socket.on('connect', () => {
+            statusSpan.textContent = 'Connected';
+            statusSpan.className = 'connected';
+            addMessage('✓ Connected to server', 'connected');
+        });
+
+        socket.on('disconnect', () => {
+            statusSpan.textContent = 'Disconnected';
+            statusSpan.className = 'disconnected';
+            addMessage('✗ Disconnected from server', 'disconnected');
+        });
+
+        // Server events
+        socket.on('time', (timeString) => {
+            timeSpan.textContent = timeString;
+        });
+
+        socket.on('chatupdated', () => {
+            addMessage('📢 Event: chatupdated');
+        });
+
+        socket.on('istyping', (data) => {
+            addMessage(`⌨️  Event: istyping - ${JSON.stringify(data)}`);
+        });
+
+        socket.on('nottyping', (data) => {
+            addMessage(`Event: nottyping - ${JSON.stringify(data)}`);
+        });
+
+        socket.on('refreshChatUsers', () => {
+            addMessage('👥 Event: refreshChatUsers');
+        });
+
+        socket.on('output', (data) => {
+            addMessage(`💬 Message output: ${JSON.stringify(data)}`, 'connected');
+        });
+
+        socket.on('status', (data) => {
+            addMessage(`📊 Status: ${data.message} (success: ${data.success})`);
+        });
+
+        // Test functions
+        function sendMessage() {
+            const name = document.getElementById('nameInput').value;
+            const message = document.getElementById('messageInput').value;
+            socket.emit('input', { name, message });
+            addMessage(`➤ Sent: input {name: "${name}", message: "${message}"}`);
+        }
+
+        function sendUserTyping() {
+            const data = { user: document.getElementById('nameInput').value };
+            socket.emit('usertyping', data);
+            addMessage(`➤ Sent: usertyping ${JSON.stringify(data)}`);
+        }
+
+        function sendUserNotTyping() {
+            const data = { user: document.getElementById('nameInput').value };
+            socket.emit('usernottyping', data);
+            addMessage(`➤ Sent: usernottyping ${JSON.stringify(data)}`);
+        }
+
+        function sendTransmit() {
+            socket.emit('transmit');
+            addMessage('➤ Sent: transmit');
+        }
+
+        function sendUserEntered() {
+            socket.emit('userEnteredChat');
+            addMessage('➤ Sent: userEnteredChat');
+        }
+
+        function sendUserLeft() {
+            socket.emit('userLeftChat');
+            addMessage('➤ Sent: userLeftChat');
+        }
+
+        function clearMessages() {
+            messagesDiv.innerHTML = '';
+        }
+    </script>
+</body>
+</html>

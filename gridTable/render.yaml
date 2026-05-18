@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: grid-table-websocket-server
+    env: node
+    buildCommand: cd gridTable/server && npm install
+    startCommand: cd gridTable/server && node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
