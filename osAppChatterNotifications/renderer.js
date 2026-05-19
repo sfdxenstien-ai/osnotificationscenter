@@ -26,10 +26,12 @@ function connectToWebSocket() {
     console.log('Connecting to WebSocket server:', WEBSOCKET_SERVER_URL);
     
     socket = io(WEBSOCKET_SERVER_URL, {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
+        upgrade: true,
         reconnection: true,
         reconnectionDelay: 1000,
-        reconnectionAttempts: 10
+        reconnectionAttempts: 10,
+        timeout: 20000
     });
 
     // Connection events
