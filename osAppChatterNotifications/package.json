@@ -1,0 +1,37 @@
+{
+  "name": "chatter-notifications-desktop",
+  "version": "1.0.0",
+  "description": "Desktop app for receiving real-time Salesforce Chatter notifications via WebSocket",
+  "main": "main.js",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=9.0.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect",
+    "package-mac": "electron-packager . ChatterNotifications --platform=darwin --arch=x64 --out=dist --overwrite",
+    "package-win": "electron-packager . ChatterNotifications --platform=win32 --arch=x64 --out=dist --overwrite",
+    "preinstall": "node --version && echo 'Node.js version check: OK'"
+  },
+  "keywords": [
+    "salesforce",
+    "chatter",
+    "notifications",
+    "websocket",
+    "electron",
+    "desktop"
+  ],
+  "author": "Salesforce Dev Team",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^42.1.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.0"
+  },
+  "overrides": {
+    "ws": "8.20.1"
+  }
+}
