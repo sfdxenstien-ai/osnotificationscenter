@@ -73,6 +73,23 @@ if not exist "node_modules\" (
     echo.
     echo [32m✓ Dependencies installed successfully![0m
     echo.
+) else (
+    echo [32m✓ Dependencies already installed[0m
+    echo.
+)
+
+REM Verify Electron is installed
+if not exist "node_modules\electron\" (
+    echo [33m⚠ Electron not found. Installing...[0m
+    echo.
+    call npm install
+    if %ERRORLEVEL% NEQ 0 (
+        echo [31mX Failed to install Electron[0m
+        pause
+        exit /b 1
+    )
+    echo [32m✓ Electron installed[0m
+    echo.
 )
 
 REM Start the application
@@ -80,8 +97,23 @@ echo [36m🚀 Starting Chatter Notifications Desktop App...[0m
 echo.
 echo Server: https://osnotificationscenter.onrender.com
 echo.
+echo If the app window doesn't open, check the error messages above.
 echo Press Ctrl+C to stop the application
 echo ==========================================
 echo.
 
 call npm start
+
+REM Check if app exited with error
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo [31mX Application exited with error code: %ERRORLEVEL%[0m
+    echo.
+    echo Common fixes:
+    echo 1. Delete node_modules folder and run this script again
+    echo 2. Make sure all files are present: main.js, index.html, package.json
+    echo 3. Check if antivirus is blocking Electron
+    echo.
+    pause
+    exit /b %ERRORLEVEL%
+)

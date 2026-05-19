@@ -5,12 +5,17 @@
 
 const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let mainWindow;
 
 function createWindow() {
+  // Check if icon exists
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  const hasIcon = fs.existsSync(iconPath);
+  
   // Create the browser window
-  mainWindow = new BrowserWindow({
+  const windowOptions = {
     width: 1400,
     height: 900,
     minWidth: 1000,
@@ -21,10 +26,16 @@ function createWindow() {
       contextIsolation: false,
       enableRemoteModule: true
     },
-    icon: path.join(__dirname, 'assets', 'icon.png'),
     title: 'Chatter Notifications',
     show: false // Don't show until ready
-  });
+  };
+  
+  // Only add icon if file exists
+  if (hasIcon) {
+    windowOptions.icon = iconPath;
+  }
+  
+  mainWindow = new BrowserWindow(windowOptions);
 
   // Load the index.html
   mainWindow.loadFile('index.html');
