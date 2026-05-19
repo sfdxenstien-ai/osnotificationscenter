@@ -3,8 +3,6 @@
  * Connects to WebSocket server and handles real-time notifications
  */
 
-const io = require('socket.io-client');
-
 // Configuration
 const WEBSOCKET_SERVER_URL = 'https://osnotificationscenter.onrender.com';
 
@@ -25,17 +23,10 @@ let currentUserId = null; // Will be set from first notification or config
 function connectToWebSocket() {
     console.log('Connecting to WebSocket server:', WEBSOCKET_SERVER_URL);
     
+    // Use socket.io-client from CDN (same as test-client.html)
     socket = io(WEBSOCKET_SERVER_URL, {
         transports: ['polling', 'websocket'],
-        upgrade: true,
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: 10,
-        timeout: 20000,
-        forceNew: false,
-        multiplex: true,
-        withCredentials: false
+        upgrade: true
     });
 
     // Connection events

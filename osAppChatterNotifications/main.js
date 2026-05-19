@@ -23,9 +23,7 @@ function createWindow() {
     backgroundColor: '#f4f6f9',
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true,
-      webSecurity: false  // Allow cross-origin requests for Socket.io
+      contextIsolation: false
     },
     title: 'Chatter Notifications',
     show: false // Don't show until ready
