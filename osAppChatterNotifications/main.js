@@ -24,7 +24,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      enableRemoteModule: true
+      enableRemoteModule: true,
+      webSecurity: false  // Allow cross-origin requests for Socket.io
     },
     title: 'Chatter Notifications',
     show: false // Don't show until ready

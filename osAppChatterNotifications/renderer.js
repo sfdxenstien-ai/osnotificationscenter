@@ -30,8 +30,12 @@ function connectToWebSocket() {
         upgrade: true,
         reconnection: true,
         reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
         reconnectionAttempts: 10,
-        timeout: 20000
+        timeout: 20000,
+        forceNew: false,
+        multiplex: true,
+        withCredentials: false
     });
 
     // Connection events
