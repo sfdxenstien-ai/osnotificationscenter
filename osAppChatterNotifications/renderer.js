@@ -183,6 +183,7 @@ function transformNotification(notification) {
         feedItemId: notification.feedItemId,
         caseId: notification.caseId,
         caseNumber: notification.caseNumber,
+        caseUrl: notification.caseUrl || notification.caseURL,
         accountName: notification.accountName,
         contactName: notification.contactName,
         messagePreview: notification.messagePreview || 'No message preview',
@@ -280,7 +281,7 @@ function createNotificationRow(notification) {
                 </div>
             </td>
             <td class="col-case">
-                <span class="link-primary" title="${notification.caseId}">
+                <span class="link-primary" title="${notification.caseId}" onclick="openCaseUrl('${escapeHtml(notification.caseUrl || '')}')" style="cursor: ${notification.caseUrl ? 'pointer' : 'default'}">
                     <svg class="icon-small" viewBox="0 0 24 24">
                         <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
                     </svg>
@@ -432,6 +433,29 @@ function viewMessage(message) {
 
 function closeMessageModal() {
     document.getElementById('messageModal').style.display = 'none';
+}
+
+function openCaseUrl(url) {
+    if (!url || url === '') {
+        console.log('No case URL available');
+        return;
+    }
+    
+    console.log('Opening case URL:', url);
+    
+    // Try to use Electron's shell if available
+    if (window.require) {
+        try {
+            const { shell } = window.require('electron');
+            shell.openExternal(url);
+            return;
+        } catch (err) {
+            console.log('Electron shell not available, using window.open');
+        }
+    }
+    
+    // Fallback to window.open
+    window.open(url, '_blank');
 }
 
 // ============================================================================
