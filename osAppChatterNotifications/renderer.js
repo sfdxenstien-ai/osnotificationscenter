@@ -289,7 +289,7 @@ function createNotificationRow(notification) {
                 </span>
             </td>
             <td class="col-message">
-                <button class="btn-view-message" onclick="viewMessage('${escapeHtml(notification.messagePreview)}')">
+                <button class="btn-view-message" onclick="viewMessage('${notification.id}')">
                     <svg class="icon-small" viewBox="0 0 24 24">
                         <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/>
                     </svg>
@@ -423,12 +423,22 @@ function getCurrentList() {
 // MODAL
 // ============================================================================
 
-function viewMessage(message) {
+function viewMessage(notificationId) {
     const modal = document.getElementById('messageModal');
     const modalContent = document.getElementById('modalContent');
     
-    modalContent.textContent = message;
-    modal.style.display = 'flex';
+    // Find the notification in all lists
+    let notification = null;
+    notification = notifications.myActions.find(n => n.id === notificationId) ||
+                   notifications.pastDue.find(n => n.id === notificationId) ||
+                   notifications.completed.find(n => n.id === notificationId);
+    
+    if (notification && notification.messagePreview) {
+        modalContent.textContent = notification.messagePreview;
+        modal.style.display = 'flex';
+    } else {
+        console.error('Notification not found or no message preview available:', notificationId);
+    }
 }
 
 function closeMessageModal() {
