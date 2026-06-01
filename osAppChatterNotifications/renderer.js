@@ -151,23 +151,35 @@ function addNotificationToList(notification) {
     const dueDate = transformed.dueDate ? new Date(transformed.dueDate) : null;
     const isPastDue = dueDate && dueDate < today;
     
+    let isNewNotification = false;
+    
     // Determine which list to add to
     if (transformed.status === 'Completed') {
         if (!notifications.completed.find(item => item.id === transformed.id)) {
             notifications.completed.unshift(transformed);
+            isNewNotification = true;
         }
     } else if (isPastDue) {
         if (!notifications.pastDue.find(item => item.id === transformed.id)) {
             notifications.pastDue.unshift(transformed);
+            isNewNotification = true;
         }
     } else {
         if (!notifications.myActions.find(item => item.id === transformed.id)) {
             notifications.myActions.unshift(transformed);
+            isNewNotification = true;
+            
+            // Show desktop notification and flash window for new My Actions items
+            showDesktopNotification(transformed);
+            flashWindow();
         }
     }
 
     // Update badge counts
-    updateBadgeCounts();
+    if (isNewNotification) {
+        updateBadgeCounts();
+        updateTaskbarBadge();
+    }
 }
 
 function transformNotification(notification) {
@@ -357,6 +369,67 @@ function updateBadgeCounts() {
     document.getElementById('completedCount').textContent = notifications.completed.length;
 }
 
+function updateTaskbarBadge() {
+    const totalPending = notifications.myActions.length + notifications.pastDue.length;
+    
+    // Try to update badge count if Electron is available
+    if (window.require) {
+        try {
+            const { ipcRenderer } = window.require('electron');
+            // Send badge count to main process
+            ipcRenderer.send('update-badge-count', totalPending);
+        } catch (err) {
+            console.log('Electron IPC not available for badge update');
+        }
+    }
+    
+    // Update page title with count for browser tab
+    if (totalPending > 0) {
+        document.title = `(${totalPending}) Chatter Notifications`;
+    } else {
+        document.title = 'Chatter Notifications';
+    }
+}
+
+function flashWindow() {
+    // Flash the window in taskbar to get user's attention
+    if (window.require) {
+        try {
+            const { ipcRenderer } = window.require('electron');
+            // Request window flash from main process
+            ipcRenderer.send('flash-window');
+        } catch (err) {
+            console.log('Electron IPC not available for window flash');
+        }
+    }
+    
+    // Play notification sound if available
+    playNotificationSound();
+}
+
+function playNotificationSound() {
+    try {
+        // Create a simple beep sound using Web Audio API
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+    } catch (err) {
+        console.log('Could not play notification sound:', err);
+    }
+}
+
 function updateLastUpdate() {
     const now = new Date();
     document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
@@ -527,11 +600,23 @@ function showDesktopNotification(notification) {
     }
     
     if (Notification.permission === 'granted') {
-        new Notification('New Chatter Notification', {
+        const notif = new Notification('New Chatter Notification', {
             body: notification.messagePreview || 'You have a new notification',
             icon: 'assets/icon.png',
-            tag: notification.notificationId
+            tag: notification.id || notification.notificationId,
+            badge: 'assets/icon.png',
+            requireInteraction: false,
+            silent: false
         });
+        
+        // Auto close after 5 seconds
+        setTimeout(() => notif.close(), 5000);
+        
+        // Focus window when notification is clicked
+        notif.onclick = () => {
+            window.focus();
+            notif.close();
+        };
     } else if (Notification.permission !== 'denied') {
         Notification.requestPermission().then(permission => {
             if (permission === 'granted') {
@@ -559,7 +644,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set initial section
     updateSectionHeader();
     
+    // Listen for section switching from menu shortcuts
+    if (window.require) {
+        try {
+            const { ipcRenderer } = window.require('electron');
+            
+            ipcRenderer.on('switch-section', (event, section) => {
+                switch(section) {
+                    case 'myActions':
+                        showMyActions();
+                        break;
+                    case 'pastDue':
+                        showPastDue();
+                        break;
+                    case 'completed':
+                        showCompleted();
+                        break;
+                }
+            });
+        } catch (err) {
+            console.log('Electron IPC not available for menu shortcuts');
+        }
+    }
+    
     console.log('Ready to receive notifications from:', WEBSOCKET_SERVER_URL);
+});
+
+// Handle window focus - clear flash and update badge
+window.addEventListener('focus', () => {
+    // Update badge when window is focused
+    updateTaskbarBadge();
 });
 
 // Cleanup on window close
