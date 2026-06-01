@@ -196,6 +196,28 @@ ipcMain.on('update-badge-count', (event, count) => {
   }
 });
 
+ipcMain.on('restore-window', () => {
+  if (mainWindow) {
+    // Restore window if minimized
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    
+    // Show window if hidden
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    
+    // Focus the window
+    mainWindow.focus();
+    
+    // On macOS, also bring to front
+    if (process.platform === 'darwin') {
+      app.dock.show();
+    }
+  }
+});
+
 // Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

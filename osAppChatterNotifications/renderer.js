@@ -614,7 +614,18 @@ function showDesktopNotification(notification) {
         
         // Focus window when notification is clicked
         notif.onclick = () => {
-            window.focus();
+            // Request main process to restore and focus the window
+            if (window.require) {
+                try {
+                    const { ipcRenderer } = window.require('electron');
+                    ipcRenderer.send('restore-window');
+                } catch (err) {
+                    console.log('Electron IPC not available, using window.focus fallback');
+                    window.focus();
+                }
+            } else {
+                window.focus();
+            }
             notif.close();
         };
     } else if (Notification.permission !== 'denied') {
