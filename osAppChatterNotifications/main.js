@@ -3,11 +3,46 @@
  * Creates the application window and manages app lifecycle
  */
 
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 let mainWindow;
+
+/**
+ * Generate a vibrant badge overlay for Windows taskbar
+ * @param {number} count - The notification count to display
+ * @returns {Electron.NativeImage|null} - The badge image
+ */
+function generateBadgeOverlay(count) {
+  if (count <= 0) return null;
+
+  const text = count > 99 ? '99+' : count.toString();
+  const size = 32;
+  
+  // Create vibrant SVG badge with gradient
+  const svg = `
+    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="badgeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:1" />
+          <stop offset="50%" style="stop-color:#FF5252;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#E91E63;stop-opacity:1" />
+        </linearGradient>
+        <filter id="shadow">
+          <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="rgba(0,0,0,0.5)"/>
+        </filter>
+      </defs>
+      <circle cx="16" cy="16" r="15" fill="url(#badgeGradient)" stroke="#D32F2F" stroke-width="1.5"/>
+      <text x="16" y="22" font-family="Arial, sans-serif" font-size="18" font-weight="bold" 
+            fill="white" text-anchor="middle" filter="url(#shadow)">${text}</text>
+    </svg>
+  `;
+
+  // Convert SVG to native image
+  const buffer = Buffer.from(svg);
+  return nativeImage.createFromBuffer(buffer);
+}
 
 function createWindow() {
   // Check if icon exists
@@ -177,12 +212,12 @@ ipcMain.on('update-badge-count', (event, count) => {
     // macOS dock badge
     app.dock.setBadge(count > 0 ? count.toString() : '');
   } else if (process.platform === 'win32') {
-    // Windows taskbar overlay
+    // Windows taskbar overlay with vibrant badge
     if (mainWindow) {
       if (count > 0) {
-        // You can create a small badge icon dynamically or use a pre-made one
-        // For now, we'll use the flash and title update from renderer
-        mainWindow.setOverlayIcon(null, count.toString());
+        const badgeImage = generateBadgeOverlay(count);
+        const description = count > 99 ? '99+ notifications' : `${count} notification${count > 1 ? 's' : ''}`;
+        mainWindow.setOverlayIcon(badgeImage, description);
       } else {
         mainWindow.setOverlayIcon(null, '');
       }

@@ -588,6 +588,36 @@ function escapeHtml(text) {
     return text.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
 
+function generateVibrantNotificationIcon() {
+    // Create vibrant notification bell icon with gradient background
+    const svg = `
+        <svg width="256" height="256" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+                    <stop offset="50%" style="stop-color:#5C6BC0;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#7B1FA2;stop-opacity:1" />
+                </linearGradient>
+                <radialGradient id="dotGradient" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#FF5252;stop-opacity:1" />
+                    <stop offset="70%" style="stop-color:#FF1744;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#D50000;stop-opacity:1" />
+                </radialGradient>
+            </defs>
+            <rect width="256" height="256" rx="38" ry="38" fill="url(#bgGradient)"/>
+            <path d="M 84 145 Q 84 98 128 98 Q 172 98 172 145 L 84 145 Z" fill="white"/>
+            <ellipse cx="128" cy="145" rx="44" ry="10" fill="white"/>
+            <circle cx="128" cy="165" r="12" fill="#FFD700"/>
+            <path d="M 113 93 Q 113 83 128 83 Q 143 83 143 93" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+            <circle cx="185" cy="90" r="30" fill="url(#dotGradient)"/>
+            <circle cx="185" cy="90" r="30" fill="none" stroke="white" stroke-width="3"/>
+        </svg>
+    `;
+    
+    // Convert SVG to data URL
+    return 'data:image/svg+xml;base64,' + btoa(svg);
+}
+
 function refreshNotifications() {
     console.log('Refreshing notifications...');
     renderNotifications();
@@ -600,11 +630,14 @@ function showDesktopNotification(notification) {
     }
     
     if (Notification.permission === 'granted') {
+        // Generate vibrant notification icon using SVG data URL
+        const vibrantIcon = generateVibrantNotificationIcon();
+        
         const notif = new Notification('New Chatter Notification', {
             body: notification.messagePreview || 'You have a new notification',
-            icon: 'assets/icon.png',
+            icon: vibrantIcon,
             tag: notification.id || notification.notificationId,
-            badge: 'assets/icon.png',
+            badge: vibrantIcon,
             requireInteraction: false,
             silent: false
         });
