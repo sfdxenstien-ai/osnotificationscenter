@@ -37,16 +37,21 @@ function generateBadgeOverlay(count) {
   `;
 
   try {
-    // Convert SVG to data URL and then to native image
-    const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    // Convert SVG to data URL using base64 (more reliable on Windows)
+    const base64Svg = Buffer.from(svg, 'utf-8').toString('base64');
+    const dataUrl = `data:image/svg+xml;base64,${base64Svg}`;
+    console.log('🎨 Converting SVG to base64 data URL...');
+    
     const image = nativeImage.createFromDataURL(dataUrl);
+    console.log('📐 Initial image size:', image.getSize(), 'isEmpty:', image.isEmpty());
     
     // Resize to ensure it's exactly 16x16
     const resized = image.resize({ width: 16, height: 16 });
+    console.log('📐 Resized image size:', resized.getSize(), 'isEmpty:', resized.isEmpty());
     
     // Verify the image was created
     if (resized.isEmpty()) {
-      console.log('⚠️ Badge image is empty, trying canvas approach...');
+      console.log('⚠️ Badge image is empty after resize, trying canvas approach...');
       return generateCanvasBadge(count);
     }
     
@@ -59,38 +64,48 @@ function generateBadgeOverlay(count) {
 }
 
 /**
- * Generate badge using canvas/bitmap approach as fallback
+ * Generate badge using raw bitmap data (guaranteed to work on Windows)
  * @param {number} count - The notification count
- * @returns {Electron.NativeImage|null} - Canvas-based badge image
+ * @returns {Electron.NativeImage|null} - Bitmap-based badge image
  */
 function generateCanvasBadge(count) {
   if (count <= 0) return null;
   
-  const text = count > 99 ? '99' : count.toString();
+  console.log('🎨 Generating badge using raw bitmap approach...');
   
-  // Create a larger SVG and let Electron resize it
-  const size = 32; // Create at 2x size for better quality
-  const fontSize = text.length > 1 ? 22 : 26;
+  const size = 16;
+  const buffer = Buffer.alloc(size * size * 4); // RGBA format
   
-  const svg = `
-    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="#FF3B30" stroke="#FFFFFF" stroke-width="2"/>
-      <text x="${size/2}" y="${size/2 + 8}" 
-            font-family="Arial, sans-serif" 
-            font-size="${fontSize}" 
-            font-weight="bold" 
-            fill="#FFFFFF" 
-            text-anchor="middle">${text}</text>
-    </svg>
-  `;
+  // Draw a red circle with white text manually
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - size/2;
+      const dy = y - size/2;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const index = (y * size + x) * 4;
+      
+      if (distance <= size/2 - 1) {
+        // Inside circle - red background
+        buffer[index] = 255;     // R
+        buffer[index + 1] = 59;  // G  
+        buffer[index + 2] = 48;  // B
+        buffer[index + 3] = 255; // A (fully opaque)
+      } else {
+        // Outside circle - transparent
+        buffer[index] = 0;
+        buffer[index + 1] = 0;
+        buffer[index + 2] = 0;
+        buffer[index + 3] = 0;
+      }
+    }
+  }
   
   try {
-    const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-    const image = nativeImage.createFromDataURL(dataUrl);
-    // Resize down to 16x16 for taskbar overlay
-    return image.resize({ width: 16, height: 16 });
+    const image = nativeImage.createFromBuffer(buffer, { width: size, height: size });
+    console.log('✅ Bitmap badge created, size:', image.getSize(), 'isEmpty:', image.isEmpty());
+    return image;
   } catch (error) {
-    console.error('❌ Canvas badge generation failed:', error);
+    console.error('❌ Bitmap badge generation failed:', error);
     return null;
   }
 }
