@@ -19,20 +19,21 @@ function generateBadgeOverlay(count) {
   if (count <= 0) return null;
 
   const text = count > 99 ? '99' : count.toString();
-  // Windows taskbar overlay should be 16x16 for best results
-  const size = 16;
-  const fontSize = text.length > 1 ? 11 : 13;
+  // Create at larger size (32x32) for better rendering, then resize to 16x16
+  const size = 32;
+  const fontSize = text.length > 1 ? 18 : 20;
   
-  // Create vibrant solid badge (gradients don't work well at 16x16)
+  // Create vibrant solid badge (use larger size for better text rendering)
   const svg = `
-    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 1}" fill="#FF3B30" stroke="#FFFFFF" stroke-width="1"/>
-      <text x="${size/2}" y="${size/2 + 4}" 
-            font-family="Arial, sans-serif" 
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="#FF3B30" stroke="#FFFFFF" stroke-width="2"/>
+      <text x="${size/2}" y="${size/2}" 
+            font-family="Arial, Helvetica, sans-serif" 
             font-size="${fontSize}" 
             font-weight="bold" 
             fill="#FFFFFF" 
-            text-anchor="middle">${text}</text>
+            text-anchor="middle"
+            dominant-baseline="central">${text}</text>
     </svg>
   `;
 
@@ -40,22 +41,22 @@ function generateBadgeOverlay(count) {
     // Convert SVG to data URL using base64 (more reliable on Windows)
     const base64Svg = Buffer.from(svg, 'utf-8').toString('base64');
     const dataUrl = `data:image/svg+xml;base64,${base64Svg}`;
-    console.log('🎨 Converting SVG to base64 data URL...');
+    console.log('🎨 Creating badge at 32x32 with text:', text);
     
     const image = nativeImage.createFromDataURL(dataUrl);
-    console.log('📐 Initial image size:', image.getSize(), 'isEmpty:', image.isEmpty());
+    console.log('📐 Initial image:', image.getSize(), 'isEmpty:', image.isEmpty());
     
-    // Resize to ensure it's exactly 16x16
-    const resized = image.resize({ width: 16, height: 16 });
-    console.log('📐 Resized image size:', resized.getSize(), 'isEmpty:', resized.isEmpty());
+    // Resize to 16x16 for Windows taskbar
+    const resized = image.resize({ width: 16, height: 16, quality: 'best' });
+    console.log('📐 Resized to 16x16:', resized.getSize(), 'isEmpty:', resized.isEmpty());
     
-    // Verify the image was created
+    // Verify the image has content
     if (resized.isEmpty()) {
-      console.log('⚠️ Badge image is empty after resize, trying canvas approach...');
+      console.log('⚠️ Badge image is empty after resize, using fallback...');
       return generateCanvasBadge(count);
     }
     
-    console.log('✅ Badge overlay created successfully, size:', resized.getSize());
+    console.log('✅ Badge with text "' + text + '" created successfully');
     return resized;
   } catch (error) {
     console.error('❌ Error creating badge from SVG:', error);
