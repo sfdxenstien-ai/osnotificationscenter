@@ -11,84 +11,88 @@ let mainWindow;
 
 /**
  * Generate a vibrant badge overlay for Windows taskbar
+ * Windows taskbar overlays should be 16x16 pixels for optimal display
  * @param {number} count - The notification count to display
  * @returns {Electron.NativeImage|null} - The badge image
  */
 function generateBadgeOverlay(count) {
   if (count <= 0) return null;
 
-  const text = count > 99 ? '99+' : count.toString();
-  const size = 64; // Larger size for better visibility
-  const fontSize = text.length > 2 ? 32 : 40; // Smaller font for "99+"
+  const text = count > 99 ? '99' : count.toString();
+  // Windows taskbar overlay should be 16x16 for best results
+  const size = 16;
+  const fontSize = text.length > 1 ? 11 : 13;
   
-  // Create vibrant SVG badge with gradient
+  // Create vibrant solid badge (gradients don't work well at 16x16)
   const svg = `
     <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="badgeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:1" />
-          <stop offset="50%" style="stop-color:#FF5252;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#E91E63;stop-opacity:1" />
-        </linearGradient>
-      </defs>
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="url(#badgeGradient)" stroke="#D32F2F" stroke-width="2"/>
-      <text x="${size/2}" y="${size/2 + fontSize/3}" 
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 1}" fill="#FF3B30" stroke="#FFFFFF" stroke-width="1"/>
+      <text x="${size/2}" y="${size/2 + 4}" 
             font-family="Arial, sans-serif" 
             font-size="${fontSize}" 
             font-weight="bold" 
-            fill="white" 
-            text-anchor="middle" 
-            stroke="#C41E3A" 
-            stroke-width="1">${text}</text>
+            fill="#FFFFFF" 
+            text-anchor="middle">${text}</text>
     </svg>
   `;
 
   try {
     // Convert SVG to data URL and then to native image
-    const dataUrl = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
+    const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     const image = nativeImage.createFromDataURL(dataUrl);
     
+    // Resize to ensure it's exactly 16x16
+    const resized = image.resize({ width: 16, height: 16 });
+    
     // Verify the image was created
-    if (image.isEmpty()) {
-      console.log('⚠️ Badge image is empty, trying fallback...');
-      return generateSimpleBadge(count);
+    if (resized.isEmpty()) {
+      console.log('⚠️ Badge image is empty, trying canvas approach...');
+      return generateCanvasBadge(count);
     }
     
-    console.log('✅ Badge image created successfully, size:', image.getSize());
-    return image;
+    console.log('✅ Badge overlay created successfully, size:', resized.getSize());
+    return resized;
   } catch (error) {
     console.error('❌ Error creating badge from SVG:', error);
-    return generateSimpleBadge(count);
+    return generateCanvasBadge(count);
   }
 }
 
 /**
- * Generate a simple solid-color badge as fallback
+ * Generate badge using canvas/bitmap approach as fallback
  * @param {number} count - The notification count
- * @returns {Electron.NativeImage|null} - Simple badge image
+ * @returns {Electron.NativeImage|null} - Canvas-based badge image
  */
-function generateSimpleBadge(count) {
+function generateCanvasBadge(count) {
   if (count <= 0) return null;
   
-  const text = count > 99 ? '99+' : count.toString();
-  const size = 64;
-  const fontSize = text.length > 2 ? 32 : 40;
+  const text = count > 99 ? '99' : count.toString();
   
-  // Simple solid red badge without gradient
+  // Create a larger SVG and let Electron resize it
+  const size = 32; // Create at 2x size for better quality
+  const fontSize = text.length > 1 ? 22 : 26;
+  
   const svg = `
     <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="#FF3B30" stroke="#C41E3A" stroke-width="3"/>
-      <text x="${size/2}" y="${size/2 + fontSize/3}" 
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="#FF3B30" stroke="#FFFFFF" stroke-width="2"/>
+      <text x="${size/2}" y="${size/2 + 8}" 
             font-family="Arial, sans-serif" 
             font-size="${fontSize}" 
             font-weight="bold" 
-            fill="white" 
+            fill="#FFFFFF" 
             text-anchor="middle">${text}</text>
     </svg>
   `;
   
-  const dataUrl = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
-  return nativeImage.createFromDataURL(dataUrl);
+  try {
+    const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    const image = nativeImage.createFromDataURL(dataUrl);
+    // Resize down to 16x16 for taskbar overlay
+    return image.resize({ width: 16, height: 16 });
+  } catch (error) {
+    console.error('❌ Canvas badge generation failed:', error);
+    return null;
+  }
 }
 
 function createWindow() {
@@ -203,17 +207,32 @@ function createMenu() {
       label: 'Help',
       submenu: [
         {
-          label: 'Test Badge (Windows)',
+          label: 'Test Badge - Count 3 (Windows)',
           click: () => {
-            if (process.platform === 'win32' && mainWindow) {
-              console.log('🧪 Testing badge with count: 5');
-              const testBadge = generateBadgeOverlay(5);
-              if (testBadge) {
-                mainWindow.setOverlayIcon(testBadge, '5 test notifications');
-                console.log('✅ Test badge applied');
+            if (mainWindow) {
+              console.log('🧪 Testing taskbar badge with count: 3');
+              const testBadge = generateBadgeOverlay(3);
+              if (testBadge && !testBadge.isEmpty()) {
+                try {
+                  mainWindow.setOverlayIcon(testBadge, '3 notifications');
+                  console.log('✅ Test badge applied to taskbar icon');
+                  console.log('👀 Look at your taskbar - you should see a red circle with "3" on the app icon');
+                } catch (error) {
+                  console.error('❌ Error setting test badge:', error);
+                }
               } else {
-                console.log('❌ Test badge generation failed');
+                console.log('❌ Test badge generation failed - image is null or empty');
               }
+            }
+          }
+        },
+        {
+          label: 'Clear Badge (Windows)',
+          click: () => {
+            if (mainWindow) {
+              console.log('🧹 Clearing taskbar badge');
+              mainWindow.setOverlayIcon(null, '');
+              console.log('✅ Badge cleared from taskbar icon');
             }
           }
         },
@@ -270,34 +289,38 @@ ipcMain.on('flash-window', () => {
 });
 
 ipcMain.on('update-badge-count', (event, count) => {
-  console.log('📊 Updating badge count:', count);
+  console.log('📊 Received badge update request. Count:', count, '| Platform:', process.platform);
   
   // Update badge count
   if (process.platform === 'darwin') {
     // macOS dock badge
     app.dock.setBadge(count > 0 ? count.toString() : '');
+    console.log('🍎 macOS dock badge updated');
   } else if (process.platform === 'win32') {
     // Windows taskbar overlay with vibrant badge
     if (mainWindow) {
       // Ensure window is visible and ready
       if (!mainWindow.isDestroyed() && mainWindow.isVisible()) {
         if (count > 0) {
+          console.log('🪟 Generating Windows taskbar badge overlay...');
           const badgeImage = generateBadgeOverlay(count);
-          if (badgeImage) {
+          if (badgeImage && !badgeImage.isEmpty()) {
             const description = count > 99 ? '99+ notifications' : `${count} notification${count > 1 ? 's' : ''}`;
-            console.log('🪟 Setting Windows taskbar badge:', description);
+            console.log('🎨 Badge image created. Setting on taskbar...');
             try {
               mainWindow.setOverlayIcon(badgeImage, description);
-              console.log('✅ Badge overlay set successfully');
+              console.log('✅ SUCCESS! Badge overlay set on taskbar icon with count:', count);
+              console.log('👀 CHECK YOUR TASKBAR - You should see a red circle with number on the app icon!');
             } catch (error) {
               console.error('❌ Error setting overlay icon:', error);
             }
           } else {
-            console.log('⚠️ Badge image generation returned null');
+            console.log('⚠️ Badge image generation returned null or empty image');
           }
         } else {
-          console.log('🪟 Clearing Windows taskbar badge');
+          console.log('🪟 Clearing Windows taskbar badge (count is 0)');
           mainWindow.setOverlayIcon(null, '');
+          console.log('✅ Badge cleared from taskbar');
         }
       } else {
         console.log('⚠️ Window not ready for badge update (destroyed or hidden)');
@@ -318,6 +341,7 @@ ipcMain.on('update-badge-count', (event, count) => {
   // Unity launcher badge (Ubuntu)
   if (process.platform === 'linux') {
     app.setBadgeCount(count);
+    console.log('🐧 Linux badge count updated');
   }
 });
 
