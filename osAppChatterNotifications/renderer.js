@@ -372,26 +372,37 @@ function updateBadgeCounts() {
 function updateTaskbarBadge() {
     const totalPending = notifications.myActions.length + notifications.pastDue.length;
     
-    console.log('🔔 Updating taskbar badge with count:', totalPending);
+    console.log('\n' + '─'.repeat(70));
+    console.log('🔔 RENDERER: Updating taskbar badge');
+    console.log('   My Actions:', notifications.myActions.length);
+    console.log('   Past Due:', notifications.pastDue.length);
+    console.log('   Total Pending:', totalPending);
+    console.log('─'.repeat(70));
     
     // Try to update badge count if Electron is available
     if (window.require) {
         try {
             const { ipcRenderer } = window.require('electron');
             // Send badge count to main process
+            console.log('📤 Sending IPC message: update-badge-count with count:', totalPending);
             ipcRenderer.send('update-badge-count', totalPending);
-            console.log('✅ Badge update message sent to main process');
+            console.log('✅ IPC message sent successfully');
         } catch (err) {
             console.log('❌ Electron IPC not available for badge update:', err);
         }
+    } else {
+        console.log('⚠️  window.require is not available (running in browser?)');
     }
     
     // Update page title with count for browser tab
     if (totalPending > 0) {
         document.title = `(${totalPending}) Chatter Notifications`;
+        console.log('📝 Page title updated:', document.title);
     } else {
         document.title = 'Chatter Notifications';
+        console.log('📝 Page title reset');
     }
+    console.log('─'.repeat(70) + '\n');
 }
 
 function flashWindow() {

@@ -305,7 +305,12 @@ ipcMain.on('flash-window', () => {
 });
 
 ipcMain.on('update-badge-count', (event, count) => {
-  console.log('📊 Received badge update request. Count:', count, '| Platform:', process.platform);
+  console.log('\n' + '='.repeat(70));
+  console.log('📊 BADGE UPDATE REQUEST RECEIVED');
+  console.log('   Count:', count);
+  console.log('   Platform:', process.platform);
+  console.log('   Timestamp:', new Date().toLocaleTimeString());
+  console.log('='.repeat(70));
   
   // Update badge count
   if (process.platform === 'darwin') {
@@ -313,43 +318,77 @@ ipcMain.on('update-badge-count', (event, count) => {
     app.dock.setBadge(count > 0 ? count.toString() : '');
     console.log('🍎 macOS dock badge updated');
   } else if (process.platform === 'win32') {
+    console.log('🪟 Windows Platform Detected - Processing taskbar badge...');
+    
     // Windows taskbar overlay with vibrant badge
-    if (mainWindow) {
-      // Ensure window is visible and ready
-      if (!mainWindow.isDestroyed() && mainWindow.isVisible()) {
-        if (count > 0) {
-          console.log('🪟 Generating Windows taskbar badge overlay...');
-          const badgeImage = generateBadgeOverlay(count);
-          if (badgeImage && !badgeImage.isEmpty()) {
-            const description = count > 99 ? '99+ notifications' : `${count} notification${count > 1 ? 's' : ''}`;
-            console.log('🎨 Badge image created. Setting on taskbar...');
-            try {
-              mainWindow.setOverlayIcon(badgeImage, description);
-              console.log('✅ SUCCESS! Badge overlay set on taskbar icon with count:', count);
-              console.log('👀 CHECK YOUR TASKBAR - You should see a red circle with number on the app icon!');
-            } catch (error) {
-              console.error('❌ Error setting overlay icon:', error);
-            }
-          } else {
-            console.log('⚠️ Badge image generation returned null or empty image');
-          }
-        } else {
-          console.log('🪟 Clearing Windows taskbar badge (count is 0)');
-          mainWindow.setOverlayIcon(null, '');
-          console.log('✅ Badge cleared from taskbar');
-        }
-      } else {
-        console.log('⚠️ Window not ready for badge update (destroyed or hidden)');
-        // Retry after window is ready
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.once('ready-to-show', () => {
-            console.log('🔄 Retrying badge update after window ready');
-            event.sender.send('retry-badge-update');
-          });
-        }
-      }
-    } else {
-      console.log('⚠️ Main window not available for badge update');
+    if (!mainWindow) {
+      console.log('❌ FAILED: Main window is NULL');
+      return;
+    }
+    console.log('✅ Main window exists');
+    
+    if (mainWindow.isDestroyed()) {
+      console.log('❌ FAILED: Main window is DESTROYED');
+      return;
+    }
+    console.log('✅ Main window is not destroyed');
+    
+    if (!mainWindow.isVisible()) {
+      console.log('⚠️  WARNING: Main window is NOT VISIBLE');
+      console.log('   Minimized:', mainWindow.isMinimized());
+      console.log('   Will retry when window becomes visible...');
+      mainWindow.once('ready-to-show', () => {
+        console.log('🔄 Window now visible, retrying badge update');
+        event.sender.send('retry-badge-update');
+      });
+      return;
+    }
+    console.log('✅ Main window is visible');
+    
+    if (count <= 0) {
+      console.log('📭 Count is 0 or negative - CLEARING badge');
+      mainWindow.setOverlayIcon(null, '');
+      console.log('✅ Badge cleared from taskbar');
+      return;
+    }
+    console.log('✅ Count is positive:', count);
+    
+    console.log('🎨 Generating badge image...');
+    const badgeImage = generateBadgeOverlay(count);
+    
+    if (!badgeImage) {
+      console.log('❌ FAILED: Badge image is NULL');
+      return;
+    }
+    console.log('✅ Badge image generated');
+    
+    if (badgeImage.isEmpty()) {
+      console.log('❌ FAILED: Badge image is EMPTY');
+      return;
+    }
+    console.log('✅ Badge image is not empty');
+    console.log('   Image size:', badgeImage.getSize());
+    
+    const description = count > 99 ? '99+ notifications' : `${count} notification${count > 1 ? 's' : ''}`;
+    console.log('📝 Description:', description);
+    
+    try {
+      console.log('🔧 Calling setOverlayIcon()...');
+      mainWindow.setOverlayIcon(badgeImage, description);
+      console.log('');
+      console.log('🎉'.repeat(35));
+      console.log('✅ SUCCESS! Badge overlay set on taskbar icon!');
+      console.log('   Count displayed:', count);
+      console.log('👀 CHECK YOUR WINDOWS TASKBAR NOW!');
+      console.log('   Look at the bottom of your screen');
+      console.log('   The app icon should have a red circle with "' + count + '"');
+      console.log('🎉'.repeat(35));
+      console.log('');
+    } catch (error) {
+      console.log('❌ FAILED: Error calling setOverlayIcon()');
+      console.error('   Error details:', error);
+      console.error('   Error message:', error.message);
+      console.error('   Error stack:', error.stack);
     }
   }
   
@@ -359,6 +398,8 @@ ipcMain.on('update-badge-count', (event, count) => {
     app.setBadgeCount(count);
     console.log('🐧 Linux badge count updated');
   }
+  
+  console.log('='.repeat(70) + '\n');
 });
 
 ipcMain.on('restore-window', () => {
