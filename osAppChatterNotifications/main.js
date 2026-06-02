@@ -243,18 +243,8 @@ function createMenu() {
           click: () => {
             if (mainWindow) {
               console.log('🧪 Testing taskbar badge with count: 3');
-              const testBadge = generateBadgeOverlay(3);
-              if (testBadge && !testBadge.isEmpty()) {
-                try {
-                  mainWindow.setOverlayIcon(testBadge, '3 notifications');
-                  console.log('✅ Test badge applied to taskbar icon');
-                  console.log('👀 Look at your taskbar - you should see a red circle with "3" on the app icon');
-                } catch (error) {
-                  console.error('❌ Error setting test badge:', error);
-                }
-              } else {
-                console.log('❌ Test badge generation failed - image is null or empty');
-              }
+              // Request badge from renderer (same as normal flow)
+              mainWindow.webContents.send('generate-badge-image', 3);
             }
           }
         },
@@ -369,43 +359,9 @@ ipcMain.on('update-badge-count', (event, count) => {
     }
     console.log('✅ Count is positive:', count);
     
-    console.log('🎨 Generating badge image...');
-    const badgeImage = generateBadgeOverlay(count);
-    
-    if (!badgeImage) {
-      console.log('❌ FAILED: Badge image is NULL');
-      return;
-    }
-    console.log('✅ Badge image generated');
-    
-    if (badgeImage.isEmpty()) {
-      console.log('❌ FAILED: Badge image is EMPTY');
-      return;
-    }
-    console.log('✅ Badge image is not empty');
-    console.log('   Image size:', badgeImage.getSize());
-    
-    const description = count > 99 ? '99+ notifications' : `${count} notification${count > 1 ? 's' : ''}`;
-    console.log('📝 Description:', description);
-    
-    try {
-      console.log('🔧 Calling setOverlayIcon()...');
-      mainWindow.setOverlayIcon(badgeImage, description);
-      console.log('');
-      console.log('🎉'.repeat(35));
-      console.log('✅ SUCCESS! Badge overlay set on taskbar icon!');
-      console.log('   Count displayed:', count);
-      console.log('👀 CHECK YOUR WINDOWS TASKBAR NOW!');
-      console.log('   Look at the bottom of your screen');
-      console.log('   The app icon should have a red circle with "' + count + '"');
-      console.log('🎉'.repeat(35));
-      console.log('');
-    } catch (error) {
-      console.log('❌ FAILED: Error calling setOverlayIcon()');
-      console.error('   Error details:', error);
-      console.error('   Error message:', error.message);
-      console.error('   Error stack:', error.stack);
-    }
+    // Request badge image from renderer (which has access to Canvas API)
+    console.log('📤 Requesting badge image from renderer process...');
+    event.sender.send('generate-badge-image', count);
   }
   
   // Linux doesn't have native badge support, but some desktop environments do
@@ -416,6 +372,39 @@ ipcMain.on('update-badge-count', (event, count) => {
   }
   
   console.log('='.repeat(70) + '\n');
+});
+
+// Receive badge image from renderer and apply it
+ipcMain.on('badge-image-ready', (event, dataUrl, count) => {
+  console.log('📥 Received badge image from renderer');
+  
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    console.log('❌ Window no longer available');
+    return;
+  }
+  
+  try {
+    const badgeImage = nativeImage.createFromDataURL(dataUrl);
+    console.log('📐 Badge image size:', badgeImage.getSize(), 'isEmpty:', badgeImage.isEmpty());
+    
+    if (badgeImage.isEmpty()) {
+      console.log('❌ Badge image is empty');
+      return;
+    }
+    
+    const description = count > 99 ? '99+ notifications' : `${count} notification${count > 1 ? 's' : ''}`;
+    
+    mainWindow.setOverlayIcon(badgeImage, description);
+    console.log('');
+    console.log('🎉'.repeat(35));
+    console.log('✅ SUCCESS! Badge overlay set on taskbar icon!');
+    console.log('   Count displayed:', count);
+    console.log('👀 CHECK YOUR WINDOWS TASKBAR NOW!');
+    console.log('🎉'.repeat(35));
+    console.log('');
+  } catch (error) {
+    console.error('❌ Error setting badge:', error);
+  }
 });
 
 ipcMain.on('restore-window', () => {

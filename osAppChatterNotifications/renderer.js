@@ -726,6 +726,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('🔄 Retrying badge update as requested by main process');
                 updateTaskbarBadge();
             });
+            
+            // Listen for badge image generation request (Windows)
+            ipcRenderer.on('generate-badge-image', (event, count) => {
+                console.log('🎨 Generating badge image using Canvas API for count:', count);
+                
+                // Create an offscreen canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = 16;
+                canvas.height = 16;
+                const ctx = canvas.getContext('2d');
+                
+                // Draw red circle background
+                ctx.fillStyle = '#FF3B30';
+                ctx.beginPath();
+                ctx.arc(8, 8, 7, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Draw white border
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(8, 8, 7, 0, 2 * Math.PI);
+                ctx.stroke();
+                
+                // Draw count text
+                const text = count > 99 ? '99' : count.toString();
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold ' + (text.length > 1 ? '9px' : '11px') + ' Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, 8, 8);
+                
+                // Convert canvas to data URL
+                const dataUrl = canvas.toDataURL('image/png');
+                
+                console.log('✅ Badge image created with Canvas, sending to main process');
+                
+                // Send back to main process
+                ipcRenderer.send('badge-image-ready', dataUrl, count);
+            });
         } catch (err) {
             console.log('Electron IPC not available for menu shortcuts');
         }
