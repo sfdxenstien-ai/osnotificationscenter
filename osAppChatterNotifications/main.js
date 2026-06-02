@@ -18,7 +18,8 @@ function generateBadgeOverlay(count) {
   if (count <= 0) return null;
 
   const text = count > 99 ? '99+' : count.toString();
-  const size = 32;
+  const size = 64; // Larger size for better visibility
+  const fontSize = text.length > 2 ? 32 : 40; // Smaller font for "99+"
   
   // Create vibrant SVG badge with gradient
   const svg = `
@@ -29,19 +30,65 @@ function generateBadgeOverlay(count) {
           <stop offset="50%" style="stop-color:#FF5252;stop-opacity:1" />
           <stop offset="100%" style="stop-color:#E91E63;stop-opacity:1" />
         </linearGradient>
-        <filter id="shadow">
-          <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="rgba(0,0,0,0.5)"/>
-        </filter>
       </defs>
-      <circle cx="16" cy="16" r="15" fill="url(#badgeGradient)" stroke="#D32F2F" stroke-width="1.5"/>
-      <text x="16" y="22" font-family="Arial, sans-serif" font-size="18" font-weight="bold" 
-            fill="white" text-anchor="middle" filter="url(#shadow)">${text}</text>
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="url(#badgeGradient)" stroke="#D32F2F" stroke-width="2"/>
+      <text x="${size/2}" y="${size/2 + fontSize/3}" 
+            font-family="Arial, sans-serif" 
+            font-size="${fontSize}" 
+            font-weight="bold" 
+            fill="white" 
+            text-anchor="middle" 
+            stroke="#C41E3A" 
+            stroke-width="1">${text}</text>
     </svg>
   `;
 
-  // Convert SVG to native image
-  const buffer = Buffer.from(svg);
-  return nativeImage.createFromBuffer(buffer);
+  try {
+    // Convert SVG to data URL and then to native image
+    const dataUrl = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
+    const image = nativeImage.createFromDataURL(dataUrl);
+    
+    // Verify the image was created
+    if (image.isEmpty()) {
+      console.log('⚠️ Badge image is empty, trying fallback...');
+      return generateSimpleBadge(count);
+    }
+    
+    console.log('✅ Badge image created successfully, size:', image.getSize());
+    return image;
+  } catch (error) {
+    console.error('❌ Error creating badge from SVG:', error);
+    return generateSimpleBadge(count);
+  }
+}
+
+/**
+ * Generate a simple solid-color badge as fallback
+ * @param {number} count - The notification count
+ * @returns {Electron.NativeImage|null} - Simple badge image
+ */
+function generateSimpleBadge(count) {
+  if (count <= 0) return null;
+  
+  const text = count > 99 ? '99+' : count.toString();
+  const size = 64;
+  const fontSize = text.length > 2 ? 32 : 40;
+  
+  // Simple solid red badge without gradient
+  const svg = `
+    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="#FF3B30" stroke="#C41E3A" stroke-width="3"/>
+      <text x="${size/2}" y="${size/2 + fontSize/3}" 
+            font-family="Arial, sans-serif" 
+            font-size="${fontSize}" 
+            font-weight="bold" 
+            fill="white" 
+            text-anchor="middle">${text}</text>
+    </svg>
+  `;
+  
+  const dataUrl = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
+  return nativeImage.createFromDataURL(dataUrl);
 }
 
 function createWindow() {
@@ -156,6 +203,22 @@ function createMenu() {
       label: 'Help',
       submenu: [
         {
+          label: 'Test Badge (Windows)',
+          click: () => {
+            if (process.platform === 'win32' && mainWindow) {
+              console.log('🧪 Testing badge with count: 5');
+              const testBadge = generateBadgeOverlay(5);
+              if (testBadge) {
+                mainWindow.setOverlayIcon(testBadge, '5 test notifications');
+                console.log('✅ Test badge applied');
+              } else {
+                console.log('❌ Test badge generation failed');
+              }
+            }
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'About',
           click: () => {
             const { dialog } = require('electron');
@@ -207,6 +270,8 @@ ipcMain.on('flash-window', () => {
 });
 
 ipcMain.on('update-badge-count', (event, count) => {
+  console.log('📊 Updating badge count:', count);
+  
   // Update badge count
   if (process.platform === 'darwin') {
     // macOS dock badge
@@ -214,13 +279,38 @@ ipcMain.on('update-badge-count', (event, count) => {
   } else if (process.platform === 'win32') {
     // Windows taskbar overlay with vibrant badge
     if (mainWindow) {
-      if (count > 0) {
-        const badgeImage = generateBadgeOverlay(count);
-        const description = count > 99 ? '99+ notifications' : `${count} notification${count > 1 ? 's' : ''}`;
-        mainWindow.setOverlayIcon(badgeImage, description);
+      // Ensure window is visible and ready
+      if (!mainWindow.isDestroyed() && mainWindow.isVisible()) {
+        if (count > 0) {
+          const badgeImage = generateBadgeOverlay(count);
+          if (badgeImage) {
+            const description = count > 99 ? '99+ notifications' : `${count} notification${count > 1 ? 's' : ''}`;
+            console.log('🪟 Setting Windows taskbar badge:', description);
+            try {
+              mainWindow.setOverlayIcon(badgeImage, description);
+              console.log('✅ Badge overlay set successfully');
+            } catch (error) {
+              console.error('❌ Error setting overlay icon:', error);
+            }
+          } else {
+            console.log('⚠️ Badge image generation returned null');
+          }
+        } else {
+          console.log('🪟 Clearing Windows taskbar badge');
+          mainWindow.setOverlayIcon(null, '');
+        }
       } else {
-        mainWindow.setOverlayIcon(null, '');
+        console.log('⚠️ Window not ready for badge update (destroyed or hidden)');
+        // Retry after window is ready
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.once('ready-to-show', () => {
+            console.log('🔄 Retrying badge update after window ready');
+            event.sender.send('retry-badge-update');
+          });
+        }
       }
+    } else {
+      console.log('⚠️ Main window not available for badge update');
     }
   }
   

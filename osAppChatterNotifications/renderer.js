@@ -372,14 +372,17 @@ function updateBadgeCounts() {
 function updateTaskbarBadge() {
     const totalPending = notifications.myActions.length + notifications.pastDue.length;
     
+    console.log('🔔 Updating taskbar badge with count:', totalPending);
+    
     // Try to update badge count if Electron is available
     if (window.require) {
         try {
             const { ipcRenderer } = window.require('electron');
             // Send badge count to main process
             ipcRenderer.send('update-badge-count', totalPending);
+            console.log('✅ Badge update message sent to main process');
         } catch (err) {
-            console.log('Electron IPC not available for badge update');
+            console.log('❌ Electron IPC not available for badge update:', err);
         }
     }
     
@@ -706,6 +709,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                 }
             });
+            
+            // Listen for retry badge update request
+            ipcRenderer.on('retry-badge-update', () => {
+                console.log('🔄 Retrying badge update as requested by main process');
+                updateTaskbarBadge();
+            });
         } catch (err) {
             console.log('Electron IPC not available for menu shortcuts');
         }
@@ -716,6 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Handle window focus - clear flash and update badge
 window.addEventListener('focus', () => {
+    console.log('🔍 Window focused - refreshing badge');
     // Update badge when window is focused
     updateTaskbarBadge();
 });
