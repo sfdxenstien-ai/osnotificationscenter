@@ -128,10 +128,26 @@ function createWindow() {
   // Show window when ready to prevent flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    
+    // Log platform and badge support
+    console.log('='.repeat(60));
+    console.log('🚀 Chatter Notifications App Started');
+    console.log('📱 Platform:', process.platform);
+    console.log('🔔 Badge Support:');
+    if (process.platform === 'darwin') {
+      console.log('   ✅ macOS Dock Badge - Enabled');
+      console.log('   ❌ Windows Taskbar Overlay - Not Available on macOS');
+    } else if (process.platform === 'win32') {
+      console.log('   ✅ Windows Taskbar Overlay - Enabled');
+      console.log('   📍 Badge will appear on taskbar icon');
+    } else {
+      console.log('   ✅ Linux Badge Count - Enabled (if supported by DE)');
+    }
+    console.log('='.repeat(60));
   });
 
   // Open DevTools in development (optional)
-  // mainWindow.webContents.openDevTools();
+  mainWindow.webContents.openDevTools(); // ← ENABLED for debugging
 
   // Handle window close
   mainWindow.on('closed', () => {
