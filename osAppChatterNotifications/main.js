@@ -339,9 +339,9 @@ ipcMain.on('update-badge-count', (event, count) => {
     }
     console.log('✅ Main window is not destroyed');
     
-    if (!mainWindow.isVisible()) {
-      console.log('⚠️  WARNING: Main window is NOT VISIBLE');
-      console.log('   Minimized:', mainWindow.isMinimized());
+    // Check if window is visible (allow minimized windows - they can still show badges!)
+    if (!mainWindow.isVisible() && !mainWindow.isMinimized()) {
+      console.log('⚠️  WARNING: Main window is HIDDEN (not minimized)');
       console.log('   Will retry when window becomes visible...');
       mainWindow.once('ready-to-show', () => {
         console.log('🔄 Window now visible, retrying badge update');
@@ -349,7 +349,12 @@ ipcMain.on('update-badge-count', (event, count) => {
       });
       return;
     }
-    console.log('✅ Main window is visible');
+    
+    if (mainWindow.isMinimized()) {
+      console.log('📊 Window is minimized - badge will update on taskbar icon');
+    } else {
+      console.log('✅ Main window is visible and focused');
+    }
     
     if (count <= 0) {
       console.log('📭 Count is 0 or negative - CLEARING badge');
