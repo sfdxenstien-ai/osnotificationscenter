@@ -639,12 +639,35 @@ function refreshNotifications() {
 }
 
 function showDesktopNotification(notification) {
+    // Use Electron's native notification system instead of Web Notification API
+    // This provides proper Windows integration and reliable click handling
+    if (window.require) {
+        try {
+            const { ipcRenderer } = window.require('electron');
+            
+            console.log('🔔 Requesting native notification via IPC');
+            
+            // Send notification data to main process for native notification
+            ipcRenderer.send('show-native-notification', {
+                title: 'New Chatter Notification',
+                body: notification.messagePreview || 'You have a new notification',
+                // Native notifications will use app icon automatically
+            });
+            
+            console.log('✅ Native notification request sent');
+            return;
+        } catch (err) {
+            console.log('❌ Electron IPC not available, falling back to Web Notification:', err);
+        }
+    }
+    
+    // Fallback to Web Notification API (for browser/development)
     if (!('Notification' in window)) {
+        console.log('⚠️ Notifications not supported in this environment');
         return;
     }
     
     if (Notification.permission === 'granted') {
-        // Generate vibrant notification icon using SVG data URL
         const vibrantIcon = generateVibrantNotificationIcon();
         
         const notif = new Notification('New Chatter Notification', {
@@ -656,23 +679,10 @@ function showDesktopNotification(notification) {
             silent: false
         });
         
-        // Auto close after 5 seconds
         setTimeout(() => notif.close(), 5000);
         
-        // Focus window when notification is clicked
         notif.onclick = () => {
-            // Request main process to restore and focus the window
-            if (window.require) {
-                try {
-                    const { ipcRenderer } = window.require('electron');
-                    ipcRenderer.send('restore-window');
-                } catch (err) {
-                    console.log('Electron IPC not available, using window.focus fallback');
-                    window.focus();
-                }
-            } else {
-                window.focus();
-            }
+            window.focus();
             notif.close();
         };
     } else if (Notification.permission !== 'denied') {
@@ -691,9 +701,13 @@ function showDesktopNotification(notification) {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Chatter Notifications Desktop App started');
     
-    // Request notification permission
-    if ('Notification' in window && Notification.permission === 'default') {
+    // Only request notification permission if NOT running in Electron
+    // (Native Electron notifications don't need permission)
+    if (!window.require && 'Notification' in window && Notification.permission === 'default') {
+        console.log('⚠️ Running in browser - requesting Web Notification permission');
         Notification.requestPermission();
+    } else if (window.require) {
+        console.log('✅ Running in Electron - using native notifications (no permission needed)');
     }
     
     // Connect to WebSocket server

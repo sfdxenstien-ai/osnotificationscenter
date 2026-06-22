@@ -3,7 +3,7 @@
  * Creates the application window and manages app lifecycle
  */
 
-const { app, BrowserWindow, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, nativeImage, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -449,6 +449,80 @@ ipcMain.on('restore-window', () => {
     
     console.log('✅ Window restored and focused');
   }
+});
+
+// Handle native notification display (with proper Windows click support)
+ipcMain.on('show-native-notification', (event, notificationData) => {
+  console.log('🔔 Creating native notification:', notificationData.title);
+  
+  if (!Notification.isSupported()) {
+    console.log('❌ Native notifications not supported on this platform');
+    return;
+  }
+  
+  // Create notification options
+  const options = {
+    title: notificationData.title || 'New Chatter Notification',
+    body: notificationData.body || 'You have a new notification',
+    silent: false,
+    urgency: 'normal'
+  };
+  
+  // Add icon if provided (Windows supports this)
+  if (notificationData.icon && fs.existsSync(notificationData.icon)) {
+    options.icon = notificationData.icon;
+  } else {
+    // Use app icon as fallback
+    const iconPath = path.join(__dirname, 'assets', 'icon.png');
+    if (fs.existsSync(iconPath)) {
+      options.icon = iconPath;
+    }
+  }
+  
+  // Create the native notification
+  const notification = new Notification(options);
+  
+  // ✅ THIS IS THE KEY: Native Electron notifications properly handle clicks on Windows!
+  notification.on('click', () => {
+    console.log('🖱️  Native notification clicked - restoring window');
+    
+    if (mainWindow) {
+      // Restore window if minimized
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      
+      // Show window if hidden
+      if (!mainWindow.isVisible()) {
+        mainWindow.show();
+      }
+      
+      // On Windows, use setAlwaysOnTop trick to bring window to front
+      if (process.platform === 'win32') {
+        mainWindow.setAlwaysOnTop(true);
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.setAlwaysOnTop(false);
+      } else {
+        mainWindow.focus();
+      }
+      
+      // On macOS, also bring to front
+      if (process.platform === 'darwin') {
+        app.dock.show();
+      }
+      
+      console.log('✅ Window restored from notification click');
+    }
+  });
+  
+  notification.on('close', () => {
+    console.log('🔕 Notification closed');
+  });
+  
+  // Show the notification
+  notification.show();
+  console.log('✅ Native notification displayed');
 });
 
 // Quit when all windows are closed (except on macOS)

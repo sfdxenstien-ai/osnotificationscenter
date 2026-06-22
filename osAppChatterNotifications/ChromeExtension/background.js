@@ -3,6 +3,9 @@
  * Manages WebSocket connection and background tasks
  */
 
+// Import socket.io library at top level (required for service workers)
+importScripts('socket.io.min.js');
+
 const WEBSOCKET_SERVER_URL = 'https://osnotificationscenter.onrender.com';
 const RECONNECT_DELAY = 5000;
 const HEARTBEAT_INTERVAL = 30000;
@@ -40,6 +43,9 @@ self.addEventListener('activate', (event) => {
 async function initializeExtension() {
   console.log('Initializing extension...');
   
+  // Check notification permissions
+  await checkNotificationPermissions();
+  
   // Load stored data
   const stored = await chrome.storage.local.get(['notifications', 'userId']);
   if (stored.notifications) {
@@ -48,6 +54,9 @@ async function initializeExtension() {
   if (stored.userId) {
     currentUserId = stored.userId;
   }
+  
+  // Check server health before connecting
+  await checkServerHealth();
   
   // Connect to WebSocket
   connectToWebSocket();
@@ -60,21 +69,83 @@ async function initializeExtension() {
 }
 
 // ============================================================================
+// NOTIFICATION PERMISSIONS
+// ============================================================================
+
+async function checkNotificationPermissions() {
+  try {
+    // In Manifest V3, notifications permission is granted at install time
+    // but we should verify it's available
+    const permissions = await chrome.permissions.getAll();
+    console.log('Available permissions:', permissions);
+    
+    if (permissions.permissions.includes('notifications')) {
+      console.log('✅ Notification permission granted');
+      return true;
+    } else {
+      console.warn('⚠️ Notification permission not available');
+      return false;
+    }
+  } catch (error) {
+    console.error('Error checking notification permissions:', error);
+    return false;
+  }
+}
+
+function testNotification() {
+  console.log('Creating test notification...');
+  const testNotif = {
+    notificationId: 'test-' + Date.now(),
+    notificationType: 'Test Notification',
+    messagePreview: 'This is a test notification to verify the system is working',
+    caseNumber: 'TEST-001',
+    accountName: 'Test Account'
+  };
+  showChromeNotification(testNotif);
+}
+
+// ============================================================================
+// SERVER HEALTH CHECK
+// ============================================================================
+
+async function checkServerHealth() {
+  try {
+    console.log('Checking server health...');
+    const response = await fetch(`${WEBSOCKET_SERVER_URL}/api/health`);
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Server is healthy:', data);
+      return true;
+    } else {
+      console.warn('⚠️ Server responded with status:', response.status);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Server health check failed:', error);
+    console.error('This usually means the server is not running or not accessible');
+    console.error('Please check: https://osnotificationscenter.onrender.com/api/health');
+    return false;
+  }
+}
+
+// ============================================================================
 // WEBSOCKET CONNECTION
 // ============================================================================
 
 function connectToWebSocket() {
   console.log('Connecting to WebSocket server:', WEBSOCKET_SERVER_URL);
   
-  // Import socket.io from CDN using importScripts for service worker
-  importScripts('https://cdn.socket.io/4.8.1/socket.io.min.js');
-  
   socket = io(WEBSOCKET_SERVER_URL, {
-    transports: ['polling', 'websocket'],
-    upgrade: true,
+    transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionDelay: RECONNECT_DELAY,
-    reconnectionAttempts: Infinity
+    reconnectionAttempts: Infinity,
+    timeout: 20000,
+    forceNew: true,
+    path: '/socket.io/',
+    autoConnect: true,
+    secure: true,
+    rejectUnauthorized: false
   });
 
   socket.on('connect', () => {
@@ -100,8 +171,12 @@ function connectToWebSocket() {
 
   socket.on('connect_error', (error) => {
     console.error('Connection error:', error);
+    console.error('Error message:', error.message);
+    console.error('Error type:', error.type);
+    console.error('Error description:', error.description);
     connectionStatus = 'disconnected';
     updateBadge();
+    broadcastToPopups({ type: 'CONNECTION_ERROR', error: error.message });
   });
 
   socket.on('salesforce_notification', (data) => {
@@ -141,14 +216,23 @@ function stopHeartbeat() {
 // ============================================================================
 
 function handleNotification(data) {
-  if (!data) return;
+  console.log('📥 handleNotification called with data:', data);
+  if (!data) {
+    console.warn('No data received in handleNotification');
+    return;
+  }
 
   if (data.notifications && Array.isArray(data.notifications)) {
-    data.notifications.forEach(notification => {
+    console.log(`Processing ${data.notifications.length} notifications`);
+    data.notifications.forEach((notification, index) => {
+      console.log(`Processing notification ${index + 1}:`, notification);
       addNotificationToList(notification);
+      showChromeNotification(notification);
     });
   } else if (data.notification) {
+    console.log('Processing single notification:', data.notification);
     addNotificationToList(data.notification);
+    showChromeNotification(data.notification);
   }
 
   saveNotifications();
@@ -157,7 +241,11 @@ function handleNotification(data) {
 }
 
 function handleUserNotification(notification) {
-  if (!notification) return;
+  console.log('👤 handleUserNotification called with:', notification);
+  if (!notification) {
+    console.warn('No notification received in handleUserNotification');
+    return;
+  }
   
   addNotificationToList(notification);
   showChromeNotification(notification);
@@ -265,20 +353,79 @@ function moveToCompleted(notificationIds) {
 // ============================================================================
 
 function showChromeNotification(notification) {
+  console.log('🔔 showChromeNotification called with:', notification);
+  
+  const notificationId = notification.notificationId || notification.id || generateId();
+  console.log('Creating notification with ID:', notificationId);
+  
   const options = {
     type: 'basic',
     iconUrl: 'https://cdn-icons-png.flaticon.com/512/2965/2965260.png',
-    title: notification.notificationType || 'New Notification',
+    title: '🔔 ' + (notification.notificationType || 'New Salesforce Notification'),
     message: notification.messagePreview || 'You have a new notification',
-    contextMessage: notification.caseNumber ? `Case: ${notification.caseNumber}` : '',
+    contextMessage: notification.caseNumber ? `Case: ${notification.caseNumber}` : (notification.accountName || ''),
     priority: 2,
-    requireInteraction: false
+    requireInteraction: true, // Keep notification visible until user interacts
+    silent: false, // Play notification sound
+    buttons: [
+      { title: 'View Now' },
+      { title: 'Dismiss' }
+    ]
   };
 
-  chrome.notifications.create(notification.id, options, (notificationId) => {
-    console.log('Chrome notification created:', notificationId);
+  console.log('Notification options:', options);
+
+  chrome.notifications.create(notificationId, options, (createdId) => {
+    if (chrome.runtime.lastError) {
+      console.error('❌ Error creating notification:', chrome.runtime.lastError);
+      return;
+    }
+    console.log('✅ Chrome notification created successfully:', createdId);
+    // Update badge to show new notification count
+    updateBadge();
   });
 }
+
+// Handle notification clicks
+chrome.notifications.onClicked.addListener((notificationId) => {
+  console.log('Notification clicked:', notificationId);
+  // Open the extension popup by opening the action
+  chrome.action.openPopup().catch(() => {
+    // If popup fails to open (e.g., in background), try opening in new window
+    chrome.windows.create({
+      url: 'popup.html',
+      type: 'popup',
+      width: 400,
+      height: 600
+    });
+  });
+  // Clear the notification
+  chrome.notifications.clear(notificationId);
+});
+
+// Handle notification button clicks
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+  console.log('Notification button clicked:', notificationId, buttonIndex);
+  
+  if (buttonIndex === 0) { // View Now button
+    chrome.action.openPopup().catch(() => {
+      chrome.windows.create({
+        url: 'popup.html',
+        type: 'popup',
+        width: 400,
+        height: 600
+      });
+    });
+  }
+  
+  // Clear the notification
+  chrome.notifications.clear(notificationId);
+});
+
+// Handle notification closed
+chrome.notifications.onClosed.addListener((notificationId, byUser) => {
+  console.log('Notification closed:', notificationId, 'by user:', byUser);
+});
 
 // ============================================================================
 // BADGE MANAGEMENT
@@ -342,6 +489,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (socket && socket.connected) {
         socket.emit('join_user_room', currentUserId);
       }
+      sendResponse({ success: true });
+      break;
+      
+    case 'TEST_NOTIFICATION':
+      testNotification();
       sendResponse({ success: true });
       break;
 

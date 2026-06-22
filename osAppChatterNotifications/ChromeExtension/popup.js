@@ -36,6 +36,18 @@ function initializeUI() {
 
     // Refresh button
     document.getElementById('btnRefresh').addEventListener('click', refreshNotifications);
+    
+    // Test notification button
+    document.getElementById('btnTestNotification').addEventListener('click', () => {
+        console.log('Test notification button clicked');
+        chrome.runtime.sendMessage({ type: 'TEST_NOTIFICATION' }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('Error sending test notification:', chrome.runtime.lastError);
+            } else {
+                console.log('Test notification sent:', response);
+            }
+        });
+    });
 }
 
 function setupEventListeners() {
