@@ -9,6 +9,55 @@ const fs = require('fs');
 
 let mainWindow;
 
+// ============================================================================
+// SINGLE INSTANCE LOCK - Prevent multiple instances of the app
+// ============================================================================
+
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Another instance is already running, quit this one
+  console.log('❌ Another instance is already running. Exiting...');
+  app.quit();
+} else {
+  // This is the primary instance
+  console.log('✅ Single instance lock acquired - this is the primary instance');
+  
+  // Handle second-instance attempts (e.g., from notification clicks)
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    console.log('🔔 Second instance attempted - focusing existing window');
+    console.log('   Command line:', commandLine);
+    
+    // Someone tried to run a second instance, focus our window instead
+    if (mainWindow) {
+      // Restore window if minimized
+      if (mainWindow.isMinimized()) {
+        console.log('   → Restoring minimized window');
+        mainWindow.restore();
+      }
+      
+      // Show window if hidden
+      if (!mainWindow.isVisible()) {
+        console.log('   → Showing hidden window');
+        mainWindow.show();
+      }
+      
+      // On Windows, use setAlwaysOnTop trick to bring window to front
+      if (process.platform === 'win32') {
+        console.log('   → Bringing window to front (Windows)');
+        mainWindow.setAlwaysOnTop(true);
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.setAlwaysOnTop(false);
+      } else {
+        mainWindow.focus();
+      }
+      
+      console.log('✅ Existing window focused');
+    }
+  });
+}
+
 /**
  * Generate a vibrant badge overlay for Windows taskbar
  * Windows taskbar overlays should be 16x16 pixels for optimal display
@@ -128,7 +177,8 @@ function createWindow() {
       contextIsolation: false
     },
     title: 'Chatter Notifications',
-    show: false // Don't show until ready
+    show: false, // Don't show until ready
+    skipTaskbar: false // Ensure it appears in taskbar
   };
   
   // Only add icon if file exists
@@ -137,6 +187,10 @@ function createWindow() {
   }
   
   mainWindow = new BrowserWindow(windowOptions);
+  
+  console.log('🪟 Window created');
+  console.log('   Process ID:', process.pid);
+  console.log('   Platform:', process.platform);
 
   // Load the index.html
   mainWindow.loadFile('index.html');
@@ -239,6 +293,39 @@ function createMenu() {
       label: 'Help',
       submenu: [
         {
+          label: 'Test Notification Click (Windows)',
+          click: () => {
+            console.log('🧪 Testing native notification with click handler');
+            
+            const testNotification = new Notification({
+              title: 'Test Notification',
+              body: 'Click me to test window restoration! Then minimize this window and click the notification.',
+              icon: path.join(__dirname, 'assets', 'icon.png')
+            });
+            
+            testNotification.on('click', () => {
+              console.log('🎯 TEST NOTIFICATION CLICKED!');
+              if (mainWindow) {
+                if (mainWindow.isMinimized()) mainWindow.restore();
+                if (!mainWindow.isVisible()) mainWindow.show();
+                if (process.platform === 'win32') {
+                  mainWindow.setAlwaysOnTop(true);
+                  mainWindow.show();
+                  mainWindow.focus();
+                  mainWindow.setAlwaysOnTop(false);
+                } else {
+                  mainWindow.focus();
+                }
+                console.log('✅ Window restored from test notification');
+              }
+            });
+            
+            testNotification.show();
+            console.log('✅ Test notification shown - minimize the window and click it!');
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Test Badge - Count 3 (Windows)',
           click: () => {
             if (mainWindow) {
@@ -282,14 +369,47 @@ function createMenu() {
 
 // App lifecycle events
 app.whenReady().then(() => {
+  // Set App User Model ID for Windows (helps with notification association)
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.chatternotifications.app');
+    console.log('✅ Windows App User Model ID set: com.chatternotifications.app');
+  }
+  
   createWindow();
 
   app.on('activate', () => {
-    // On macOS, re-create window when dock icon is clicked
-    if (BrowserWindow.getAllWindows().length === 0) {
+    console.log('📱 App activated');
+    
+    if (mainWindow) {
+      // Window exists, just focus it
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      if (!mainWindow.isVisible()) {
+        mainWindow.show();
+      }
+      mainWindow.focus();
+    } else if (BrowserWindow.getAllWindows().length === 0) {
+      // On macOS, re-create window when dock icon is clicked
       createWindow();
     }
   });
+});
+
+// Handle app activation on Windows (e.g., from notification clicks)
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  console.log('🔗 App opened with URL:', url);
+  
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
+// Handle when app is about to quit
+app.on('before-quit', () => {
+  console.log('👋 App is about to quit');
 });
 
 // IPC Handlers for notifications
@@ -468,6 +588,11 @@ ipcMain.on('show-native-notification', (event, notificationData) => {
     urgency: 'normal'
   };
   
+  // On Windows, set additional properties for proper association
+  if (process.platform === 'win32') {
+    options.toastXml = null; // Use default Windows notification
+  }
+  
   // Add icon if provided (Windows supports this)
   if (notificationData.icon && fs.existsSync(notificationData.icon)) {
     options.icon = notificationData.icon;
@@ -479,26 +604,39 @@ ipcMain.on('show-native-notification', (event, notificationData) => {
     }
   }
   
+  console.log('📋 Notification options:', JSON.stringify({
+    title: options.title,
+    body: options.body,
+    hasIcon: !!options.icon,
+    platform: process.platform
+  }));
+  
   // Create the native notification
   const notification = new Notification(options);
   
   // ✅ THIS IS THE KEY: Native Electron notifications properly handle clicks on Windows!
   notification.on('click', () => {
-    console.log('🖱️  Native notification clicked - restoring window');
+    console.log('\n' + '🎯'.repeat(35));
+    console.log('🖱️  NOTIFICATION CLICKED!');
+    console.log('   Restoring and focusing main window...');
+    console.log('🎯'.repeat(35));
     
     if (mainWindow) {
       // Restore window if minimized
       if (mainWindow.isMinimized()) {
+        console.log('   → Window is minimized, restoring...');
         mainWindow.restore();
       }
       
       // Show window if hidden
       if (!mainWindow.isVisible()) {
+        console.log('   → Window is hidden, showing...');
         mainWindow.show();
       }
       
       // On Windows, use setAlwaysOnTop trick to bring window to front
       if (process.platform === 'win32') {
+        console.log('   → Windows: Bringing window to front');
         mainWindow.setAlwaysOnTop(true);
         mainWindow.show();
         mainWindow.focus();
@@ -512,12 +650,23 @@ ipcMain.on('show-native-notification', (event, notificationData) => {
         app.dock.show();
       }
       
-      console.log('✅ Window restored from notification click');
+      console.log('✅ Window restored and focused from notification click!');
+      console.log('🎯'.repeat(35) + '\n');
+    } else {
+      console.log('❌ Main window is null - cannot restore');
     }
   });
   
   notification.on('close', () => {
     console.log('🔕 Notification closed');
+  });
+  
+  notification.on('show', () => {
+    console.log('👁️  Notification shown to user');
+  });
+  
+  notification.on('failed', (error) => {
+    console.error('❌ Notification failed:', error);
   });
   
   // Show the notification
