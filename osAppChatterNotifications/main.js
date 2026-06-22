@@ -25,11 +25,19 @@ if (!gotTheLock) {
   
   // Handle second-instance attempts (e.g., from notification clicks)
   app.on('second-instance', (event, commandLine, workingDirectory) => {
-    console.log('🔔 Second instance attempted - focusing existing window');
-    console.log('   Command line:', commandLine);
+    console.log('\n' + '🚨'.repeat(35));
+    console.log('🚨 SECOND INSTANCE LAUNCH ATTEMPTED!');
+    console.log('   This likely means a notification was clicked');
+    console.log('   Command line:', commandLine.join(' '));
+    console.log('   Working dir:', workingDirectory);
+    console.log('   Blocked - focusing existing window instead');
+    console.log('🚨'.repeat(35));
     
     // Someone tried to run a second instance, focus our window instead
     if (mainWindow) {
+      // Stop any flashing
+      mainWindow.flashFrame(false);
+      
       // Restore window if minimized
       if (mainWindow.isMinimized()) {
         console.log('   → Restoring minimized window');
@@ -48,12 +56,15 @@ if (!gotTheLock) {
         mainWindow.setAlwaysOnTop(true);
         mainWindow.show();
         mainWindow.focus();
-        mainWindow.setAlwaysOnTop(false);
+        setTimeout(() => mainWindow.setAlwaysOnTop(false), 100);
       } else {
         mainWindow.focus();
       }
       
-      console.log('✅ Existing window focused');
+      console.log('✅ Existing window focused successfully');
+      console.log('🚨'.repeat(35) + '\n');
+    } else {
+      console.log('❌ ERROR: Main window is null!');
     }
   });
 }
@@ -295,33 +306,77 @@ function createMenu() {
         {
           label: 'Test Notification Click (Windows)',
           click: () => {
-            console.log('🧪 Testing native notification with click handler');
+            console.log('\n' + '🧪'.repeat(35));
+            console.log('🧪 TESTING NOTIFICATION CLICK BEHAVIOR');
+            console.log('   1. Test notification will appear in 2 seconds');
+            console.log('   2. Minimize this window NOW');
+            console.log('   3. Click the notification when it appears');
+            console.log('   4. Watch console for click detection logs');
+            console.log('🧪'.repeat(35) + '\n');
             
-            const testNotification = new Notification({
-              title: 'Test Notification',
-              body: 'Click me to test window restoration! Then minimize this window and click the notification.',
-              icon: path.join(__dirname, 'assets', 'icon.png')
-            });
-            
-            testNotification.on('click', () => {
-              console.log('🎯 TEST NOTIFICATION CLICKED!');
-              if (mainWindow) {
-                if (mainWindow.isMinimized()) mainWindow.restore();
-                if (!mainWindow.isVisible()) mainWindow.show();
-                if (process.platform === 'win32') {
-                  mainWindow.setAlwaysOnTop(true);
-                  mainWindow.show();
-                  mainWindow.focus();
-                  mainWindow.setAlwaysOnTop(false);
-                } else {
-                  mainWindow.focus();
+            // Give user time to minimize the window
+            setTimeout(() => {
+              const testNotification = new Notification({
+                title: '🧪 TEST: Click Me!',
+                body: 'If clicking this notification opens the app, everything works! If not, check the console logs.',
+                icon: fs.existsSync(path.join(__dirname, 'assets', 'icon.png')) 
+                  ? path.join(__dirname, 'assets', 'icon.png') 
+                  : undefined
+              });
+              
+              testNotification.on('show', () => {
+                console.log('✅ Test notification shown - click it now!');
+              });
+              
+              testNotification.on('click', () => {
+                console.log('\n' + '✅'.repeat(35));
+                console.log('✅✅✅ CLICK DETECTED! NOTIFICATION CLICK WORKS! ✅✅✅');
+                console.log('✅'.repeat(35) + '\n');
+                
+                if (mainWindow) {
+                  mainWindow.flashFrame(false);
+                  if (mainWindow.isMinimized()) mainWindow.restore();
+                  if (!mainWindow.isVisible()) mainWindow.show();
+                  
+                  if (process.platform === 'win32') {
+                    mainWindow.setAlwaysOnTop(true);
+                    mainWindow.show();
+                    mainWindow.focus();
+                    setTimeout(() => mainWindow.setAlwaysOnTop(false), 100);
+                  } else {
+                    mainWindow.focus();
+                  }
+                  
+                  console.log('✅ Window restored successfully from test notification');
                 }
-                console.log('✅ Window restored from test notification');
-              }
-            });
-            
-            testNotification.show();
-            console.log('✅ Test notification shown - minimize the window and click it!');
+              });
+              
+              testNotification.on('close', () => {
+                console.log('ℹ️  Test notification closed');
+              });
+              
+              testNotification.on('failed', (event, error) => {
+                console.error('❌ Test notification failed:', error);
+              });
+              
+              testNotification.show();
+              console.log('🧪 Test notification displayed - waiting for click...');
+              
+              // If not clicked in 10 seconds, show diagnostic
+              setTimeout(() => {
+                if (mainWindow && mainWindow.isMinimized()) {
+                  console.log('\n' + '⚠️ '.repeat(35));
+                  console.log('⚠️  DIAGNOSTIC: Notification was NOT clicked within 10 seconds');
+                  console.log('   Possible issues:');
+                  console.log('   1. Notification click event is not firing (Windows limitation)');
+                  console.log('   2. App needs to be packaged (.exe) for proper Windows integration');
+                  console.log('   3. Windows notification center settings may be blocking clicks');
+                  console.log('   WORKAROUND: Click the flashing taskbar icon to restore window');
+                  console.log('⚠️ '.repeat(35) + '\n');
+                }
+              }, 10000);
+              
+            }, 2000);
           }
         },
         { type: 'separator' },
@@ -573,105 +628,191 @@ ipcMain.on('restore-window', () => {
 
 // Handle native notification display (with proper Windows click support)
 ipcMain.on('show-native-notification', (event, notificationData) => {
-  console.log('🔔 Creating native notification:', notificationData.title);
+  console.log('\n' + '='.repeat(70));
+  console.log('🔔 NOTIFICATION REQUEST RECEIVED');
+  console.log('   Title:', notificationData.title);
+  console.log('   Body:', notificationData.body);
+  console.log('   Platform:', process.platform);
+  console.log('='.repeat(70));
   
   if (!Notification.isSupported()) {
     console.log('❌ Native notifications not supported on this platform');
+    // Fallback: just focus the window
+    if (mainWindow && mainWindow.isMinimized()) {
+      mainWindow.restore();
+      mainWindow.focus();
+    }
     return;
+  }
+  
+  // Windows-specific workaround for development mode
+  // When running via npm start, Windows notifications don't properly activate the app
+  // So we'll ALSO use the window flash to ensure user sees it
+  if (process.platform === 'win32') {
+    console.log('🪟 Windows detected - using enhanced notification strategy');
+    
+    // Flash the taskbar to ensure user attention
+    if (mainWindow && !mainWindow.isFocused()) {
+      mainWindow.flashFrame(true);
+      console.log('   → Taskbar flashing activated');
+      
+      // Stop flashing when window gets focus
+      const stopFlash = () => {
+        mainWindow.flashFrame(false);
+        console.log('   → Taskbar flashing stopped');
+      };
+      mainWindow.once('focus', stopFlash);
+      
+      // Also stop after 10 seconds
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isFocused()) {
+          mainWindow.flashFrame(false);
+        }
+      }, 10000);
+    }
   }
   
   // Create notification options
   const options = {
     title: notificationData.title || 'New Chatter Notification',
     body: notificationData.body || 'You have a new notification',
-    silent: false,
-    urgency: 'normal'
+    silent: false
   };
   
-  // On Windows, set additional properties for proper association
-  if (process.platform === 'win32') {
-    options.toastXml = null; // Use default Windows notification
+  // Add icon if available
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  if (fs.existsSync(iconPath)) {
+    options.icon = iconPath;
   }
   
-  // Add icon if provided (Windows supports this)
-  if (notificationData.icon && fs.existsSync(notificationData.icon)) {
-    options.icon = notificationData.icon;
-  } else {
-    // Use app icon as fallback
-    const iconPath = path.join(__dirname, 'assets', 'icon.png');
-    if (fs.existsSync(iconPath)) {
-      options.icon = iconPath;
-    }
-  }
-  
-  console.log('📋 Notification options:', JSON.stringify({
+  console.log('📋 Creating notification with options:', {
     title: options.title,
-    body: options.body,
-    hasIcon: !!options.icon,
-    platform: process.platform
-  }));
+    bodyLength: options.body.length,
+    hasIcon: !!options.icon
+  });
   
   // Create the native notification
   const notification = new Notification(options);
   
-  // ✅ THIS IS THE KEY: Native Electron notifications properly handle clicks on Windows!
-  notification.on('click', () => {
+  // CRITICAL: Set up click handler BEFORE showing
+  const clickHandler = () => {
     console.log('\n' + '🎯'.repeat(35));
-    console.log('🖱️  NOTIFICATION CLICKED!');
-    console.log('   Restoring and focusing main window...');
+    console.log('🖱️  ✅ NOTIFICATION CLICK DETECTED!');
+    console.log('   Time:', new Date().toLocaleTimeString());
     console.log('🎯'.repeat(35));
     
-    if (mainWindow) {
-      // Restore window if minimized
+    if (!mainWindow) {
+      console.log('❌ Main window is null');
+      return;
+    }
+    
+    console.log('📱 Window state before restore:');
+    console.log('   - Is minimized:', mainWindow.isMinimized());
+    console.log('   - Is visible:', mainWindow.isVisible());
+    console.log('   - Is focused:', mainWindow.isFocused());
+    console.log('   - Is destroyed:', mainWindow.isDestroyed());
+    
+    try {
+      // Stop any flashing
+      mainWindow.flashFrame(false);
+      
+      // Restore if minimized
       if (mainWindow.isMinimized()) {
-        console.log('   → Window is minimized, restoring...');
+        console.log('   ➜ Restoring from minimized state...');
         mainWindow.restore();
       }
       
-      // Show window if hidden
+      // Show if hidden
       if (!mainWindow.isVisible()) {
-        console.log('   → Window is hidden, showing...');
+        console.log('   ➜ Showing hidden window...');
         mainWindow.show();
       }
       
-      // On Windows, use setAlwaysOnTop trick to bring window to front
+      // Platform-specific focus
       if (process.platform === 'win32') {
-        console.log('   → Windows: Bringing window to front');
+        console.log('   ➜ Windows: Force bringing to front...');
+        // Multiple approaches to ensure window comes to front
         mainWindow.setAlwaysOnTop(true);
-        mainWindow.show();
         mainWindow.focus();
-        mainWindow.setAlwaysOnTop(false);
+        mainWindow.show();
+        setTimeout(() => {
+          mainWindow.setAlwaysOnTop(false);
+          console.log('   ➜ AlwaysOnTop removed');
+        }, 100);
+      } else if (process.platform === 'darwin') {
+        app.dock.show();
+        mainWindow.focus();
       } else {
         mainWindow.focus();
       }
       
-      // On macOS, also bring to front
-      if (process.platform === 'darwin') {
-        app.dock.show();
-      }
-      
-      console.log('✅ Window restored and focused from notification click!');
+      console.log('✅ Window restoration complete!');
+      console.log('📱 Window state after restore:');
+      console.log('   - Is minimized:', mainWindow.isMinimized());
+      console.log('   - Is visible:', mainWindow.isVisible());
+      console.log('   - Is focused:', mainWindow.isFocused());
       console.log('🎯'.repeat(35) + '\n');
-    } else {
-      console.log('❌ Main window is null - cannot restore');
+      
+    } catch (error) {
+      console.error('❌ Error during window restoration:', error);
     }
+  };
+  
+  // Attach click handler
+  notification.on('click', clickHandler);
+  
+  // Additional event handlers for debugging
+  notification.on('show', () => {
+    console.log('✅ Notification SHOWN to user');
+    console.log('   Click the notification to test window activation');
   });
   
   notification.on('close', () => {
-    console.log('🔕 Notification closed');
+    console.log('🔕 Notification closed by user or timeout');
   });
   
-  notification.on('show', () => {
-    console.log('👁️  Notification shown to user');
+  notification.on('action', (event, index) => {
+    console.log('🎬 Notification action triggered:', index);
+    clickHandler(); // Also trigger window restoration
   });
   
-  notification.on('failed', (error) => {
-    console.error('❌ Notification failed:', error);
+  notification.on('failed', (event, error) => {
+    console.error('❌ Notification FAILED:', error);
   });
   
   // Show the notification
-  notification.show();
-  console.log('✅ Native notification displayed');
+  try {
+    notification.show();
+    console.log('✅ Notification.show() called successfully');
+    console.log('='.repeat(70) + '\n');
+    
+    // WORKAROUND for Windows development mode:
+    // If notification is not clicked within 3 seconds, assume click isn't working
+    // and show a taskbar flash reminder
+    if (process.platform === 'win32') {
+      const reminderTimeout = setTimeout(() => {
+        if (mainWindow && !mainWindow.isFocused() && mainWindow.isMinimized()) {
+          console.log('⚠️  Notification not clicked - reminding user via taskbar flash');
+          mainWindow.flashFrame(true);
+          
+          // Stop flashing when user clicks taskbar icon
+          const stopReminder = () => {
+            mainWindow.flashFrame(false);
+            clearTimeout(reminderTimeout);
+          };
+          mainWindow.once('focus', stopReminder);
+        }
+      }, 3000);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error showing notification:', error);
+    // Fallback: just focus the window
+    if (mainWindow && mainWindow.isMinimized()) {
+      mainWindow.restore();
+      mainWindow.focus();
+    }
+  }
 });
 
 // Quit when all windows are closed (except on macOS)
