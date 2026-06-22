@@ -414,23 +414,40 @@ ipcMain.on('badge-image-ready', (event, dataUrl, count) => {
 
 ipcMain.on('restore-window', () => {
   if (mainWindow) {
+    console.log('📱 Restore window requested');
+    console.log('   Is minimized:', mainWindow.isMinimized());
+    console.log('   Is visible:', mainWindow.isVisible());
+    
     // Restore window if minimized
     if (mainWindow.isMinimized()) {
+      console.log('   → Restoring minimized window');
       mainWindow.restore();
     }
     
     // Show window if hidden
     if (!mainWindow.isVisible()) {
+      console.log('   → Showing hidden window');
       mainWindow.show();
     }
     
-    // Focus the window
-    mainWindow.focus();
+    // On Windows, use setAlwaysOnTop trick to bring window to front
+    if (process.platform === 'win32') {
+      console.log('   → Windows: Bringing window to front');
+      mainWindow.setAlwaysOnTop(true);
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.setAlwaysOnTop(false);
+    } else {
+      // Focus the window on other platforms
+      mainWindow.focus();
+    }
     
     // On macOS, also bring to front
     if (process.platform === 'darwin') {
       app.dock.show();
     }
+    
+    console.log('✅ Window restored and focused');
   }
 });
 
